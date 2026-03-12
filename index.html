@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Even Publisher – G2</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        max-width: 640px;
+        margin: 2rem auto;
+        padding: 0 1rem 3rem;
+        background: #050509;
+        color: #f5f5f5;
+      }
+
+      h1 {
+        margin-bottom: 0.25rem;
+      }
+
+      .muted {
+        color: #9ca3af;
+        font-size: 0.9rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        gap: 1.5rem;
+        margin-top: 2rem;
+      }
+
+      .card {
+        background: radial-gradient(circle at top left, #111827, #020617);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        border: 1px solid #111827;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.9);
+      }
+
+      .card h2 {
+        font-size: 1rem;
+        margin: 0 0 0.5rem;
+      }
+
+      label {
+        display: block;
+        font-size: 0.8rem;
+        margin-top: 0.75rem;
+        margin-bottom: 0.25rem;
+        color: #9ca3af;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 0.45rem 0.55rem;
+        border-radius: 0.45rem;
+        border: 1px solid #1f2937;
+        background: #020617;
+        color: #f9fafb;
+        font-family: inherit;
+        font-size: 0.85rem;
+        box-sizing: border-box;
+      }
+
+      input:focus,
+      select:focus {
+        outline: 2px solid #4f46e5;
+        outline-offset: 1px;
+        border-color: transparent;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.5rem 0.9rem;
+        border-radius: 999px;
+        border: none;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 500;
+        font-family: inherit;
+        transition: background 120ms ease, transform 60ms ease, box-shadow 120ms ease;
+      }
+
+      .btn-primary {
+        background: linear-gradient(to right, #6366f1, #4f46e5);
+        color: white;
+        box-shadow: 0 12px 25px rgba(79, 70, 229, 0.6);
+      }
+
+      .btn-primary:hover {
+        background: linear-gradient(to right, #818cf8, #6366f1);
+        transform: translateY(-1px);
+        box-shadow: 0 18px 38px rgba(79, 70, 229, 0.75);
+      }
+
+      .btn-primary:active {
+        transform: translateY(0);
+        box-shadow: 0 10px 20px rgba(79, 70, 229, 0.6);
+      }
+
+      .btn-ghost {
+        background: transparent;
+        color: #e5e7eb;
+        border: 1px solid #1f2937;
+      }
+
+      .btn-ghost:hover {
+        background: rgba(31, 41, 55, 0.8);
+      }
+
+      .btn-row {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+      }
+
+      #status {
+        margin-top: 1rem;
+        padding: 0.75rem 0.9rem;
+        background: #020617;
+        border-radius: 0.75rem;
+        border: 1px solid #111827;
+        font-size: 0.8rem;
+        white-space: pre-wrap;
+        min-height: 2.4rem;
+      }
+
+      #event-log {
+        margin-top: 1rem;
+        padding: 0.6rem 0.8rem;
+        background: #020617;
+        border-radius: 0.75rem;
+        border: 1px solid #111827;
+        font-size: 0.75rem;
+        max-height: 260px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.1rem 0.45rem;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        background: rgba(22, 163, 74, 0.09);
+        color: #6ee7b7;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+      }
+
+      @media (max-width: 768px) {
+        .grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>Even Publisher</h1>
+        <p class="muted">
+          Connect your G2 glasses, configure OpenAI and WordPress, then drive the whole publishing flow from the
+          glasses.
+        </p>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <h2>G2 Connection</h2>
+          <p class="muted">Starts the Even Hub bridge and boots the glasses UI.</p>
+          <div class="btn-row">
+            <button id="connectBtn" class="btn btn-primary">
+              Connect glasses
+            </button>
+            <button id="actionBtn" class="btn btn-ghost">
+              Trigger action
+            </button>
+          </div>
+          <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #6b7280;">
+            <span class="badge">Tip</span>
+            &nbsp;On the glasses, use tap, double-tap and swipe gestures to navigate menus.
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>AI &amp; Publishing Settings</h2>
+          <p class="muted">Stored only on this phone, used for API calls from this WebView.</p>
+
+          <label for="openai-key">OpenAI API key</label>
+          <input id="openai-key" type="password" autocomplete="off" />
+
+          <label for="openai-model">OpenAI model</label>
+          <input id="openai-model" type="text" placeholder="gpt-4.1-mini" />
+
+          <label for="wp-url">WordPress base URL</label>
+          <input id="wp-url" type="url" placeholder="https://your-site.com" />
+
+          <label for="wp-username">WordPress username</label>
+          <input id="wp-username" type="text" autocomplete="off" />
+
+          <label for="wp-password">WordPress application password / token</label>
+          <input id="wp-password" type="password" autocomplete="off" />
+
+          <div class="btn-row">
+            <button id="save-settings" class="btn btn-primary">Save settings</button>
+          </div>
+        </section>
+      </div>
+
+      <pre id="status">Booting…</pre>
+      <pre id="event-log"></pre>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+

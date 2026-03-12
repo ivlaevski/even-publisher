@@ -1,0 +1,80 @@
+import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk';
+
+import { EvenPublisherClient } from './even-client';
+import {
+  appendEventLog,
+  loadConfigFromLocalStorage,
+  saveConfigToLocalStorage,
+  setStatus,
+  withTimeout,
+} from './utils';
+
+function bootSettingsUi(): void {
+  const config = loadConfigFromLocalStorage();
+
+  const openAiKeyInput = document.getElementById('openai-key') as HTMLInputElement | null;
+  const openAiModelInput = document.getElementById('openai-model') as HTMLInputElement | null;
+  const wpUrlInput = document.getElementById('wp-url') as HTMLInputElement | null;
+  const wpUserInput = document.getElementById('wp-username') as HTMLInputElement | null;
+  const wpPassInput = document.getElementById('wp-password') as HTMLInputElement | null;
+  const saveBtn = document.getElementById('save-settings') as HTMLButtonElement | null;
+
+  if (openAiKeyInput) openAiKeyInput.value = config.openAiApiKey;
+  if (openAiModelInput) openAiModelInput.value = config.openAiModel;
+  if (wpUrlInput) wpUrlInput.value = config.wordpressBaseUrl;
+  if (wpUserInput) wpUserInput.value = config.wordpressUsername;
+  if (wpPassInput) wpPassInput.value = config.wordpressPassword;
+
+  saveBtn?.addEventListener('click', () => {
+    const next = {
+      openAiApiKey: openAiKeyInput?.value ?? '',
+      openAiModel: openAiModelInput?.value ?? 'gpt-4.1-mini',
+      wordpressBaseUrl: wpUrlInput?.value ?? '',
+      wordpressUsername: wpUserInput?.value ?? '',
+      wordpressPassword: wpPassInput?.value ?? '',
+    };
+    saveConfigToLocalStorage(next);
+    appendEventLog('Settings saved.');
+    setStatus('Settings saved. You can now start a new research from glasses.');
+  });
+}
+
+async function main() {
+  bootSettingsUi();
+  setStatus('Waiting for Even bridge…');
+
+  const connectBtn = document.getElementById('connectBtn') as HTMLButtonElement | null;
+  const actionBtn = document.getElementById('actionBtn') as HTMLButtonElement | null;
+
+  let client: EvenPublisherClient | null = null;
+
+  connectBtn?.addEventListener('click', async () => {
+    if (client) {
+      setStatus('Already connected.');
+      return;
+    }
+    try {
+      appendEventLog('Connecting to Even bridge…');
+      const bridge = await withTimeout(waitForEvenAppBridge(), 4000, 'waitForEvenAppBridge');
+      client = new EvenPublisherClient(bridge);
+      await client.init();
+      setStatus('Connected. Use glasses main menu to start.');
+      appendEventLog('Bridge connected and EvenPublisherClient initialised.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Bridge not available: ${message}\n\nRunning in browser-only mode.`);
+      appendEventLog(`Bridge connection failed: ${message}`);
+    }
+  });
+
+  actionBtn?.addEventListener('click', () => {
+    appendEventLog('Action button pressed (no-op). Use glasses gestures to drive the flow.');
+  });
+}
+
+void main().catch((error) => {
+  // eslint-disable-next-line no-console
+  console.error('[even-publisher] boot failed', error);
+  setStatus('App boot failed');
+});
+
