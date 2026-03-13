@@ -32,6 +32,8 @@ type UiState = {
   researchSelectedIndex: number;
   readySelectedIndex: number;
   promptDelayDays: number;
+  researchDetailOffset: number;
+  readyDetailOffset: number;
 };
 
 export class EvenPublisherClient {
@@ -47,6 +49,8 @@ export class EvenPublisherClient {
     researchSelectedIndex: 0,
     readySelectedIndex: 0,
     promptDelayDays: 0,
+    researchDetailOffset: 0,
+    readyDetailOffset: 0,
   };
   private isVoiceRecording = false;
 
@@ -115,6 +119,37 @@ export class EvenPublisherClient {
     } else {
       appendEventLog(`Failed to create startup page: code=${result}`);
     }
+  }
+
+  private getPagedContent(full: string, offset: number): { content: string; offset: number; maxOffset: number } {
+    const safeFull = full ?? '';
+    const maxOffset = Math.max(0, safeFull.length - MAX_CONTENT_LENGTH);
+    const clampedOffset = clamp(offset, 0, maxOffset);
+    const content = safeFull.slice(clampedOffset, clampedOffset + MAX_CONTENT_LENGTH);
+    return { content, offset: clampedOffset, maxOffset };
+  }
+
+  private pageStep(): number {
+    // Leave some overlap so the reader doesn't "lose their place"
+    return Math.max(200, Math.floor(MAX_CONTENT_LENGTH * 0.8));
+  }
+
+  private async updateResearchDetailPage(research: Research): Promise<void> {
+    const header = `${research.title}\n\n`;
+    const footer =
+      '\n\nScroll = Read more\nDouble-tap = Open menu (Prompt / Ready for Publish / Exit)';
+    const full = header + research.content + footer;
+    const page = this.getPagedContent(full, this.ui.researchDetailOffset).content;
+
+    await this.bridge.textContainerUpgrade(
+      new TextContainerUpgrade({
+        containerID: 400,
+        containerName: 'research-detail',
+        contentOffset: 0,
+        contentLength: MAX_CONTENT_LENGTH,
+        content: page,
+      }),
+    );
   }
 
   private async loadResearches(): Promise<void> {
@@ -325,9 +360,12 @@ export class EvenPublisherClient {
 
   private async renderResearchDetail(research: Research): Promise<void> {
     this.ui.view = 'research-detail';
+    this.ui.researchDetailOffset = 0;
     const header = `${research.title}\n\n`;
-    const footer = '\n\nDouble-tap = Open menu (Prompt / Ready for Publish / Exit)';
-    const content = (header + research.content + footer).slice(0, MAX_CONTENT_LENGTH);
+    const footer =
+      '\n\nScroll = Read more\nDouble-tap = Open menu (Prompt / Ready for Publish / Exit)';
+    const full = header + research.content + footer;
+    const content = this.getPagedContent(full, this.ui.researchDetailOffset).content;
 
     await this.bridge.rebuildPageContainer(
       new RebuildPageContainer({
@@ -391,12 +429,14 @@ export class EvenPublisherClient {
 
   private async renderReadyDetail(research: Research): Promise<void> {
     this.ui.view = 'ready-detail';
+    this.ui.readyDetailOffset = 0;
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
     const header = `${research.title}\n\nPublish delay (days): ${delay}\n\n`;
     const footer =
-      '\nTap = +1 day (max 10)\nScroll up = -1 day\nDouble-tap = Publish\nLong-press / back gesture = Cancel';
+      '\nScroll = Read more\nTap = +1 day (max 10)\nScroll up at top = -1 day\nDouble-tap = Publish\nLong-press / back gesture = Cancel';
 
-    const content = (header + research.content + footer).slice(0, MAX_CONTENT_LENGTH);
+    const full = header + research.content + footer;
+    const content = this.getPagedContent(full, this.ui.readyDetailOffset).content;
 
     await this.bridge.rebuildPageContainer(
       new RebuildPageContainer({
@@ -424,8 +464,9 @@ export class EvenPublisherClient {
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
     const header = `${research.title}\n\nPublish delay (days): ${delay}\n\n`;
     const footer =
-      '\nTap = +1 day (max 10)\nScroll up = -1 day\nDouble-tap = Publish\nLong-press / back gesture = Cancel';
-    const full = (header + research.content + footer).slice(0, MAX_CONTENT_LENGTH);
+      '\nScroll = Read more\nTap = +1 day (max 10)\nScroll up at top = -1 day\nDouble-tap = Publish\nLong-press / back gesture = Cancel';
+    const full = header + research.content + footer;
+    const page = this.getPagedContent(full, this.ui.readyDetailOffset).content;
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
@@ -433,7 +474,7 @@ export class EvenPublisherClient {
         containerName: 'ready-detail',
         contentOffset: 0,
         contentLength: MAX_CONTENT_LENGTH,
-        content: full,
+        content: page,
       }),
     );
   }
@@ -698,6 +739,18 @@ export class EvenPublisherClient {
         return;
       }
 
+      if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+        this.ui.researchDetailOffset += this.pageStep();
+        await this.updateResearchDetailPage(research);
+        return;
+      }
+
+      if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
+        this.ui.researchDetailOffset -= this.pageStep();
+        await this.updateResearchDetailPage(research);
+        return;
+      }
+
       if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
         await this.openPromptMenuForResearch(research);
         this.ui.view = 'prompt-recording';
@@ -766,7 +819,18 @@ export class EvenPublisherClient {
       }
 
       if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
-        this.ui.promptDelayDays = clamp(this.ui.promptDelayDays - 1, 0, 10);
+        if (this.ui.readyDetailOffset === 0) {
+          this.ui.promptDelayDays = clamp(this.ui.promptDelayDays - 1, 0, 10);
+          await this.updateReadyDelayText(research);
+        } else {
+          this.ui.readyDetailOffset = Math.max(0, this.ui.readyDetailOffset - this.pageStep());
+          await this.updateReadyDelayText(research);
+        }
+        return;
+      }
+
+      if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+        this.ui.readyDetailOffset += this.pageStep();
         await this.updateReadyDelayText(research);
         return;
       }
