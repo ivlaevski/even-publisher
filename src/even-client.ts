@@ -791,12 +791,12 @@ export class EvenPublisherClient {
 
     if (!this.isVoiceRecording) {
       try {
-        await startSttRecording(this.bridge);
-        this.isVoiceRecording = true;
         this.ui.view = 'prompt-recording';
         await this.showTextFullScreen(
           `${research.title}\n\nListening… tap to stop, double-tap to exit.`,
         );
+        await startSttRecording(this.bridge);
+        this.isVoiceRecording = true;        
         setStatus('Voice prompt: listening… tap to stop, double-tap to exit.');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
