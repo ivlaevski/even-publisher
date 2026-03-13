@@ -24,9 +24,21 @@ async function callOpenAi<T>(config: PublisherConfig, body: unknown): Promise<T>
 
 export async function fetchLatestAiNews(config: PublisherConfig): Promise<AiNewsItem[]> {
   const prompt =
-    'List for me the latest 5 news in AI with shotest posible description, related personas, and event date\\time in JSON format. ' +
-    'Respond ONLY with a compact JSON array of items like: ' +
-    '[{"title": "...", "description": "...", "personas": ["CTO", "ML engineer"], "eventDateTime": "2026-03-12T10:00:00Z"}].';
+    'Provide the 5 most recent news events related to Artificial Intelligence.\n' +
+    ' \n' +
+    'Requirements:\n' +
+    '- Use reliable and recent sources.\n' +
+    '- Return the result strictly in JSON format.\n' +
+    '- Each item must contain the following fields:\n' +
+    '  - "title": short headline of the news\n' +
+    '  - "eventDateTime": event date and time in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM if available)\n' +
+    '  - "personas": array of notable people related to the event (empty array if none identified)\n' +
+    '  - "sourceUrl": direct URL to the primary news source (string)\n' +
+    '  - "description": a very brief summary (maximum 50 words; plain text)\n' +
+    'Output format example:\n' +
+    '[{"title": "...", "description": "...", "personas": ["CTO", "ML engineer"], "eventDateTime": "2026-03-12T10:00:00Z", "sourceUrl": "https://example.com/news"}]' +
+    '\n' +
+    'Return only the JSON array and no additional text.';
 
   const response = await callOpenAi<{
     choices: { message: { content?: string } }[];
@@ -59,6 +71,7 @@ export async function fetchLatestAiNews(config: PublisherConfig): Promise<AiNews
     description: String(item.description ?? ''),
     personas: item.personas ?? [],
     eventDateTime: item.eventDateTime ? String(item.eventDateTime) : undefined,
+    sourceUrl: item.sourceUrl ? String(item.sourceUrl) : undefined,
     raw: item,
   }));
 }
@@ -69,7 +82,38 @@ export async function elaborateResearch(
   researchTitle: string,
 ): Promise<string> {
   const prompt =
-    'Elaborate on the following topic and build a short LinkedIn post about it following my style of Linkedin messages:\n' +
+    'Write a LinkedIn post in the voice of a seasoned technology leader (Head of Software Engineering) reflecting on the deeper implications of a technology or AI-related event.' +
+    '\n' +
+    'Style requirements:\n' +
+    '- The tone must be thoughtful, reflective, and authoritative, with calm leadership insight.\n' +
+    '- Avoid hype, marketing language, or sensationalism.\n' +
+    '- The message should combine philosophical reflection with practical technology leadership perspective.\n' +
+    '- Focus on long-term consequences of technology, human behavior, trust, leadership responsibility, and organizational transformation.\n' +
+    '- Use subtle intellectual irony or light philosophical humor where appropriate.\n' +
+    '\n' +
+    'Structure:\n' +
+    '1. Start with a philosophical or thought-provoking opening statement about technology, progress, truth, or change.\n' +
+    '2. Introduce the real-world event or news briefly.\n' +
+    '3. Expand the context by explaining what this event signals about broader technological or organizational shifts.\n' +
+    '4. Provide reflection from the perspective of engineering leadership and human impact.\n' +
+    '5. Conclude with a strong insight, leadership lesson, or thought-provoking question.\n' +
+    '\n' +
+    'Formatting requirements:\n' +
+    '- Maximum 500 words.\n' +
+    '- Plain text only.\n' +
+    '- Use short paragraphs (1-5 sentences each) for LinkedIn readability.\n' +
+    '- Include a few relevant emojis to emphasize key ideas.\n' +
+    '- Do NOT use markdown formatting.\n' +
+    '\n' +
+    'Additional requirements:\n' +
+    '- Add 4-6 relevant hashtags at the end.\n' +
+    '- Include a "Source:" line with the news source link.\n' +
+    '- Add a final disclaimer stating that the content was generated with the assistance of AI.\n' +
+    '\n' +
+    'Content tone guidelines:\n' +
+    '- Write as someone with decades of experience observing multiple technology waves.\n' +
+    '- Maintain a balance between philosophical reflection and practical industry insight.\n' +
+    '- End with a memorable concluding statement that reframes the topic or raises a deeper question.\n' +
     `Title: ${researchTitle}\n` +
     `JSON: ${JSON.stringify(selected.raw ?? selected)}`;
 

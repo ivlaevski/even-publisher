@@ -10,6 +10,7 @@ export type AiNewsItem = {
   description: string;
   personas: PersonaInfo[] | string[];
   eventDateTime?: string;
+  sourceUrl?: string;
   raw: unknown;
 };
 

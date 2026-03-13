@@ -270,6 +270,7 @@ export class EvenPublisherClient {
     lines.push('');
     if (personas) lines.push(`Personas: ${personas}`);
     if (item.eventDateTime) lines.push(`Event: ${item.eventDateTime}`);
+    if (item.sourceUrl) lines.push(`Source: ${item.sourceUrl}`);
     lines.push('');
     lines.push(item.description);
     lines.push('');
