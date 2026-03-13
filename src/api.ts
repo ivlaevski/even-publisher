@@ -37,7 +37,7 @@ export async function fetchLatestAiNews(config: PublisherConfig): Promise<AiNews
     '  - "description": a very brief summary (maximum 50 words; plain text)\n' +
     'Output format example:\n' +
     '[{"title": "...", "description": "...", "personas": ["CTO", "ML engineer"], "eventDateTime": "2026-03-12T10:00:00Z", "sourceUrl": "https://example.com/news"}]' +
-    '\n' +
+    '\n\n' +
     'Return only the JSON array and no additional text.';
 
   const response = await callOpenAi<{
@@ -58,7 +58,7 @@ export async function fetchLatestAiNews(config: PublisherConfig): Promise<AiNews
   try {
     parsed = JSON.parse(content);
   } catch (error) {
-    appendEventLog(`Failed to parse OpenAI response as JSON, content="${content.slice(0, 200)}"`);
+    appendEventLog(`Failed to parse OpenAI response as JSON, content="${content}"`);
     throw error;
   }
 
