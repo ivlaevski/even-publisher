@@ -39,6 +39,7 @@ export function loadConfigFromLocalStorage(): {
   wordpressBaseUrl: string;
   wordpressUsername: string;
   wordpressPassword: string;
+  elevenLabsApiKey: string;
 } {
   return {
     openAiApiKey: localStorage.getItem('even-publisher:openai-key') ?? '',
@@ -46,6 +47,7 @@ export function loadConfigFromLocalStorage(): {
     wordpressBaseUrl: localStorage.getItem('even-publisher:wp-url') ?? '',
     wordpressUsername: localStorage.getItem('even-publisher:wp-username') ?? '',
     wordpressPassword: localStorage.getItem('even-publisher:wp-password') ?? '',
+    elevenLabsApiKey: localStorage.getItem('even-publisher:elevenlabs-key') ?? '',
   };
 }
 
@@ -55,12 +57,14 @@ export function saveConfigToLocalStorage(config: {
   wordpressBaseUrl: string;
   wordpressUsername: string;
   wordpressPassword: string;
+  elevenLabsApiKey: string;
 }): void {
   localStorage.setItem('even-publisher:openai-key', config.openAiApiKey.trim());
   localStorage.setItem('even-publisher:openai-model', config.openAiModel.trim());
   localStorage.setItem('even-publisher:wp-url', config.wordpressBaseUrl.trim());
   localStorage.setItem('even-publisher:wp-username', config.wordpressUsername.trim());
   localStorage.setItem('even-publisher:wp-password', config.wordpressPassword.trim());
+  localStorage.setItem('even-publisher:elevenlabs-key', config.elevenLabsApiKey.trim());
 }
 
 export function clamp(value: number, min: number, max: number): number {

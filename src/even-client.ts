@@ -13,6 +13,7 @@ import {
 import type { AiNewsItem, PublisherConfig, Research, ViewName } from './types';
 import { appendEventLog, clamp, generateId, loadConfigFromLocalStorage, setStatus } from './utils';
 import { elaborateResearch, fetchLatestAiNews, publishToWordPress } from './api';
+import { cancelSttRecording, feedSttAudio, startSttRecording, stopSttAndTranscribe } from './stt-elevenlabs';
 
 const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
 
@@ -47,6 +48,7 @@ export class EvenPublisherClient {
     readySelectedIndex: 0,
     promptDelayDays: 0,
   };
+  private isVoiceRecording = false;
 
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
@@ -72,6 +74,7 @@ export class EvenPublisherClient {
       wordpressBaseUrl: cfg.wordpressBaseUrl,
       wordpressUsername: cfg.wordpressUsername,
       wordpressPassword: cfg.wordpressPassword,
+      elevenLabsApiKey: cfg.elevenLabsApiKey,
     };
   }
 
@@ -555,14 +558,68 @@ export class EvenPublisherClient {
     await this.showTextFullScreen(
       `${research.title}\n\n` +
         'Prompt menu:\n' +
-        'Tap = Start voice prompt (record)\n' +
+        'Tap = Start / stop voice prompt (record)\n' +
         'Scroll down = Mark as Ready for Publish\n' +
-        'Double-tap = Exit to draft list\n\n' +
-        'Note: speech-to-text streaming can be wired here using audioControl + onEvenHubEvent.',
+        'Double-tap = Exit to main menu',
     );
   }
 
+  private async toggleVoicePromptRecording(research: Research): Promise<void> {
+    const config = this.getConfig();
+    if (!config.elevenLabsApiKey) {
+      await this.showTextFullScreen(
+        `${research.title}\n\n` +
+          'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',
+      );
+      return;
+    }
+
+    if (!this.isVoiceRecording) {
+      try {
+        await startSttRecording(this.bridge);
+        this.isVoiceRecording = true;
+        setStatus('Voice prompt: listening… tap to stop, double-tap to exit.');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await this.showTextFullScreen(
+          `${research.title}\n\nFailed to start voice prompt.\n\n${message}\n\nTap to continue.`,
+        );
+      }
+      return;
+    }
+
+    try {
+      const transcript = await stopSttAndTranscribe(config.elevenLabsApiKey);
+      this.isVoiceRecording = false;
+
+      if (!transcript.trim()) {
+        await this.showTextFullScreen(
+          `${research.title}\n\nNo speech captured.\n\nSpeak for a bit longer and try again.`,
+        );
+        return;
+      }
+
+      await this.showTextFullScreen(
+        `${research.title}\n\n` +
+          'Transcribed request:\n\n' +
+          `${transcript}\n\n` +
+          'You can now use this text to refine the draft on the phone.',
+      );
+    } catch (error) {
+      this.isVoiceRecording = false;
+      const message = error instanceof Error ? error.message : String(error);
+      await this.showTextFullScreen(
+        `${research.title}\n\nFailed to transcribe speech.\n\n${message}\n\nTap to continue.`,
+      );
+    }
+  }
+
   private async onEvenHubEvent(event: EvenHubEvent): Promise<void> {
+    if (event.audioEvent?.audioPcm) {
+      feedSttAudio(event.audioEvent.audioPcm);
+      return;
+    }
+
     if (!event.textEvent && !event.listEvent && !event.sysEvent) {
       return;
     }
@@ -657,13 +714,7 @@ export class EvenPublisherClient {
       }
 
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        await this.showTextFullScreen(
-          `${research.title}\n\n` +
-            'Voice prompt recording not yet wired to a speech-to-text backend in this template.\n\n' +
-            'You can implement audioControl + onEvenHubEvent(audioEvent) here and call AI with:\n' +
-            '"using given content do a change as requested. Content: <research> Request: <transcript>".\n\n' +
-            'Double-tap to go back.',
-        );
+        await this.toggleVoicePromptRecording(research);
         return;
       }
 
@@ -673,7 +724,11 @@ export class EvenPublisherClient {
       }
 
       if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-        await this.renderResearchDetail(research);
+        if (this.isVoiceRecording) {
+          await cancelSttRecording();
+          this.isVoiceRecording = false;
+        }
+        await this.renderMainMenu();
         return;
       }
     }

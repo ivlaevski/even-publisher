@@ -14,6 +14,7 @@ function bootSettingsUi(): void {
 
   const openAiKeyInput = document.getElementById('openai-key') as HTMLInputElement | null;
   const openAiModelInput = document.getElementById('openai-model') as HTMLInputElement | null;
+  const elevenLabsKeyInput = document.getElementById('elevenlabs-key') as HTMLInputElement | null;
   const wpUrlInput = document.getElementById('wp-url') as HTMLInputElement | null;
   const wpUserInput = document.getElementById('wp-username') as HTMLInputElement | null;
   const wpPassInput = document.getElementById('wp-password') as HTMLInputElement | null;
@@ -21,6 +22,7 @@ function bootSettingsUi(): void {
 
   if (openAiKeyInput) openAiKeyInput.value = config.openAiApiKey;
   if (openAiModelInput) openAiModelInput.value = config.openAiModel;
+  if (elevenLabsKeyInput) elevenLabsKeyInput.value = config.elevenLabsApiKey;
   if (wpUrlInput) wpUrlInput.value = config.wordpressBaseUrl;
   if (wpUserInput) wpUserInput.value = config.wordpressUsername;
   if (wpPassInput) wpPassInput.value = config.wordpressPassword;
@@ -29,6 +31,7 @@ function bootSettingsUi(): void {
     const next = {
       openAiApiKey: openAiKeyInput?.value ?? '',
       openAiModel: openAiModelInput?.value ?? 'gpt-4.1-mini',
+      elevenLabsApiKey: elevenLabsKeyInput?.value ?? '',
       wordpressBaseUrl: wpUrlInput?.value ?? '',
       wordpressUsername: wpUserInput?.value ?? '',
       wordpressPassword: wpPassInput?.value ?? '',

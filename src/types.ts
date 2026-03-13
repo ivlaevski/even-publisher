@@ -34,6 +34,7 @@ export interface PublisherConfig {
   wordpressBaseUrl: string;
   wordpressUsername: string;
   wordpressPassword: string;
+  elevenLabsApiKey: string;
 }
 
 export type ViewName =
