@@ -17,7 +17,7 @@ import { cancelSttRecording, feedSttAudio, startSttRecording, stopSttAndTranscri
 
 const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
 
-const MAX_CONTENT_LENGTH = 2000;
+const MAX_CONTENT_LENGTH = 2000-25;
 
 type ResearchState = {
   researches: Research[];
@@ -140,7 +140,7 @@ export class EvenPublisherClient {
       // +1 to account for the newline we add when joining (except possibly last)
       const extra = line.length + (currentLines.length > 0 ? 1 : 0);
       if (currentLength + extra > MAX_CONTENT_LENGTH && currentLines.length > 0) {
-        pages.push(currentLines.join('\n...\n\n'));
+        pages.push(currentLines.join('\n')+'...[page break; next page index: '+pages.length+']\n\n');
         currentLines = [line];
         currentLength = line.length;
       } else {
@@ -150,7 +150,7 @@ export class EvenPublisherClient {
     }
 
     if (currentLines.length > 0) {
-      pages.push(currentLines.join('\n'));
+      pages.push(currentLines.join('\n')+'...[end]\n\n');
     }
 
     return pages;
