@@ -181,21 +181,15 @@ export async function publishToWordPress(
   const base = config.wordpressBaseUrl.replace(/\/+$/, '');
   const url = `${base}/wp-json/wp/v2/posts`;
 
-  let date: string | undefined;
-  if (delayDays > 0) {
-    const d = new Date();
-    d.setDate(d.getDate() + delayDays);
-    date = d.toISOString();
-  }
-
   const credentials = btoa(`${config.wordpressUsername}:${config.wordpressPassword}`);
+
+  appendEventLog(`Publishing to WordPress at ${url} (delayDays=${delayDays})`);
 
   const body: Record<string, unknown> = {
     title: research.title,
     content: research.content,
-    status: delayDays > 0 ? 'future' : 'publish',
+    status: 'draft',
   };
-  if (date) body.date_gmt = date;
 
   const res = await fetch(url, {
     method: 'POST',
