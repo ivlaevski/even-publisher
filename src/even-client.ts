@@ -973,7 +973,11 @@ export class EvenPublisherClient {
       }
 
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        await this.toggleVoicePromptRecording(research);
+        if (this.isVoiceRecording) {
+          await cancelSttRecording();
+          this.isVoiceRecording = false;
+        }
+        await this.renderMainMenu();
         return;
       }
 
