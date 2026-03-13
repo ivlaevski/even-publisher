@@ -139,7 +139,7 @@ export class EvenPublisherClient {
       // +1 to account for the newline we add when joining (except possibly last)
       const extra = line.length + (currentLines.length > 0 ? 1 : 0);
       if (currentLength + extra > MAX_CONTENT_LENGTH && currentLines.length > 0) {
-        pages.push(currentLines.join('\n'));
+        pages.push(currentLines.join('\n...\n\n'));
         currentLines = [line];
         currentLength = line.length;
       } else {
@@ -155,6 +155,21 @@ export class EvenPublisherClient {
     return pages;
   }
 
+  private sanitizeForDisplay(text: string): string {
+    if (!text) return '';
+    let result = '';
+    for (const ch of text) {
+      const code = ch.codePointAt(0);
+      if (code !== undefined && code > 0xffff) {
+        const hex = code.toString(16).toUpperCase().padStart(4, '0');
+        result += `[ U+${hex} ]`;
+      } else {
+        result += ch;
+      }
+    }
+    return result;
+  }
+
   private async updateResearchDetailPage(research: Research): Promise<void> {
     if (!this.ui.researchPages.length) {
       const header = `${research.title}\n\n`;
@@ -165,7 +180,8 @@ export class EvenPublisherClient {
       this.ui.researchPageIndex = clamp(this.ui.researchPageIndex, 0, this.ui.researchPages.length - 1);
     }
 
-    const page = this.ui.researchPages[this.ui.researchPageIndex] ?? '';
+    const rawPage = this.ui.researchPages[this.ui.researchPageIndex] ?? '';
+    const page = this.sanitizeForDisplay(rawPage);
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
@@ -206,7 +222,7 @@ export class EvenPublisherClient {
   }
 
   private async showTextFullScreen(content: string, captureEvents = true): Promise<void> {
-    const trimmed = content.slice(0, MAX_CONTENT_LENGTH);
+    const trimmed = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
     await this.bridge.rebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
@@ -341,7 +357,7 @@ export class EvenPublisherClient {
     lines.push('Tap = Select and create research');
     lines.push('Double-tap = Back to list');
 
-    const content = lines.join('\n');
+    const content = this.sanitizeForDisplay(lines.join('\n'));
     await this.showTextFullScreen(content);
 
     setStatus('Detail: tap to select, double-tap to go back to list.');
@@ -392,7 +408,7 @@ export class EvenPublisherClient {
     const full = header + research.content + footer;
     this.ui.researchPages = this.buildPages(full);
     this.ui.researchPageIndex = 0;
-    const content = this.ui.researchPages[0] ?? '';
+    const content = this.sanitizeForDisplay(this.ui.researchPages[0] ?? '');
 
     await this.bridge.rebuildPageContainer(
       new RebuildPageContainer({
@@ -464,7 +480,7 @@ export class EvenPublisherClient {
     const full = header + research.content + footer;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = 0;
-    const content = this.ui.readyPages[0] ?? '';
+    const content = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '');
 
     await this.bridge.rebuildPageContainer(
       new RebuildPageContainer({
@@ -496,7 +512,8 @@ export class EvenPublisherClient {
     const full = header + research.content + footer;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = clamp(this.ui.readyPageIndex, 0, this.ui.readyPages.length - 1);
-    const page = this.ui.readyPages[this.ui.readyPageIndex] ?? '';
+    const rawPage = this.ui.readyPages[this.ui.readyPageIndex] ?? '';
+    const page = this.sanitizeForDisplay(rawPage);
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
