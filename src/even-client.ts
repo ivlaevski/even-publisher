@@ -12,7 +12,7 @@ import {
 
 import type { AiNewsItem, PublisherConfig, Research, ViewName } from './types';
 import { appendEventLog, clamp, generateId, loadConfigFromLocalStorage, setStatus } from './utils';
-import { elaborateResearch, fetchLatestAiNews, publishToWordPress, refineResearch } from './api';
+import { elaborateResearch, fetchLatestAiNews, publishToWordPress, refineResearch, synthesizeSpeech } from './api';
 import { cancelSttRecording, feedSttAudio, startSttRecording, stopSttAndTranscribe } from './stt-elevenlabs';
 
 const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
@@ -58,6 +58,8 @@ export class EvenPublisherClient {
   };
   private isVoiceRecording = false;
   private currentResearchId: string | null = null;
+  private readAloudAborted = false;
+  private currentReadAloudAudio: HTMLAudioElement | null = null;
 
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
@@ -154,6 +156,31 @@ export class EvenPublisherClient {
     }
 
     return pages;
+  }
+
+  /** Split full text into pages as arrays of lines (for read-aloud: display + speak line by line). */
+  private buildPagesAsLines(full: string): string[][] {
+    const text = full ?? '';
+    const lines = text.split('\n');
+    if (lines.length === 0) return [[]];
+    const result: string[][] = [];
+    let current: string[] = [];
+    let currentLength = 0;
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      const extra = line.length + (current.length > 0 ? 1 : 0);
+      if (currentLength + extra > MAX_CONTENT_LENGTH && current.length > 0) {
+        result.push(current);
+        current = [line];
+        currentLength = line.length;
+      } else {
+        current.push(line);
+        currentLength += extra;
+      }
+    }
+    if (current.length > 0) result.push(current);
+    return result;
   }
 
   private sanitizeForDisplay(text: string): string {
@@ -743,6 +770,7 @@ export class EvenPublisherClient {
     this.ui.view = 'research-menu';
 
     const items = [
+      'Read aloud',
       'Start / stop voice prompt (record)',
       'Mark as Ready for Publish',
       'Back to draft list',
@@ -777,6 +805,102 @@ export class EvenPublisherClient {
     );
 
     setStatus('Research menu: select an action.');
+  }
+
+  private async startReadAloud(research: Research): Promise<void> {
+    const config = this.getConfig();
+    if (!config.elevenLabsApiKey?.trim()) {
+      await this.showTextFullScreen(
+        `${research.title}\n\n` +
+          'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.\n\nTap to continue.',
+      );
+      this.ui.view = 'error';
+      return;
+    }
+
+    this.ui.view = 'research-read-aloud';
+    this.readAloudAborted = false;
+    const fullText = `${research.title}\n\n${research.content}`;
+    const pageLines = this.buildPagesAsLines(fullText);
+    const footer = '\n\nTap to stop';
+
+    setStatus('Read aloud: playing on phone. Tap on glasses to stop.');
+
+    for (let pageIndex = 0; pageIndex < pageLines.length && !this.readAloudAborted; pageIndex += 1) {
+      const lines = pageLines[pageIndex];
+      const pageText = lines.join('\n') + footer;
+      const displayText = this.sanitizeForDisplay(pageText);
+
+      await this.bridge.rebuildPageContainer(
+        new RebuildPageContainer({
+          containerTotalNum: 1,
+          textObject: [
+            new TextContainerProperty({
+              containerID: 400,
+              containerName: 'research-detail',
+              xPosition: 0,
+              yPosition: 0,
+              width: 576,
+              height: 288,
+              borderWidth: 0,
+              borderColor: 5,
+              paddingLength: 4,
+              content: displayText,
+              isEventCapture: 1,
+            }),
+          ],
+        }),
+      );
+
+      for (let i = 0; i < lines.length && !this.readAloudAborted; i += 1) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        try {
+          await this.playLineAsAudio(config, line);
+        } catch (err) {
+          appendEventLog(`Read aloud TTS error: ${err instanceof Error ? err.message : String(err)}`);
+          if (!this.readAloudAborted) {
+            await this.showTextFullScreen(
+              `Read aloud failed.\n\n${err instanceof Error ? err.message : String(err)}\n\nTap to return to menu.`,
+            );
+          }
+          break;
+        }
+      }
+    }
+
+    this.currentReadAloudAudio = null;
+    const drafts = this.getDraftResearches();
+    const r = drafts[this.ui.researchSelectedIndex];
+    if (r) await this.openResearchMenu(r);
+  }
+
+  private playLineAsAudio(config: PublisherConfig, line: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      synthesizeSpeech(config, line)
+        .then((arrayBuffer) => {
+          if (this.readAloudAborted) {
+            resolve();
+            return;
+          }
+          const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          this.currentReadAloudAudio = audio;
+          audio.onended = () => {
+            URL.revokeObjectURL(url);
+            this.currentReadAloudAudio = null;
+            resolve();
+          };
+          audio.onerror = () => {
+            URL.revokeObjectURL(url);
+            this.currentReadAloudAudio = null;
+            reject(audio.error ?? new Error('Playback failed'));
+          };
+          audio.play().catch(reject);
+        })
+        .catch(reject);
+    });
   }
 
   private async toggleVoicePromptRecording(research: Research): Promise<void> {
@@ -956,14 +1080,31 @@ export class EvenPublisherClient {
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         const idx = event.listEvent.currentSelectItemIndex ?? 0;
         if (idx === 0) {
-          await this.toggleVoicePromptRecording(research);
+          await this.startReadAloud(research);
         } else if (idx === 1) {
-          await this.markResearchReady(research);
+          await this.toggleVoicePromptRecording(research);
         } else if (idx === 2) {
-          await this.renderResearchList();
+          await this.markResearchReady(research);
         } else if (idx === 3) {
+          await this.renderResearchList();
+        } else if (idx === 4) {
           await this.renderMainMenu();
         }
+        return;
+      }
+    }
+
+    if (this.ui.view === 'research-read-aloud') {
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === OsEventTypeList.DOUBLE_CLICK_EVENT || eventType === undefined) {
+        this.readAloudAborted = true;
+        if (this.currentReadAloudAudio) {
+          this.currentReadAloudAudio.pause();
+          this.currentReadAloudAudio.currentTime = 0;
+          this.currentReadAloudAudio = null;
+        }
+        const drafts = this.getDraftResearches();
+        const research = drafts[this.ui.researchSelectedIndex];
+        if (research) await this.openResearchMenu(research);
         return;
       }
     }

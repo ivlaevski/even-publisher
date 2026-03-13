@@ -45,6 +45,7 @@ export type ViewName =
   | 'research-list'
   | 'research-detail'
   | 'research-menu'
+  | 'research-read-aloud'
   | 'ready-list'
   | 'ready-detail'
   | 'ready-menu'

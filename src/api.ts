@@ -214,3 +214,44 @@ export async function publishToWordPress(
   }
 }
 
+/** Default voice for TTS (ElevenLabs) */
+const ELEVENLABS_DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+
+/**
+ * Synthesize speech from text using ElevenLabs TTS.
+ * Returns audio as MP3 bytes (playable in browser via Audio/Blob).
+ */
+export async function synthesizeSpeech(
+  config: PublisherConfig,
+  text: string,
+): Promise<ArrayBuffer> {
+  if (!config.elevenLabsApiKey?.trim()) {
+    throw new Error('ElevenLabs API key not configured');
+  }
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error('Text to speak is empty');
+  }
+
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'xi-api-key': config.elevenLabsApiKey.trim(),
+      Accept: 'audio/mpeg',
+    },
+    body: JSON.stringify({
+      text: trimmed,
+      model_id: 'eleven_multilingual_v2',
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`ElevenLabs TTS error ${res.status}: ${errText}`);
+  }
+
+  return res.arrayBuffer();
+}
+
