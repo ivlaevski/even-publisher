@@ -405,8 +405,7 @@ export class EvenPublisherClient {
     this.ui.view = 'research-detail';
     this.currentResearchId = research.id;
     const header = `${research.title}\n\n`;
-    const footer =
-      '\n\nScroll = Read more\nDouble-tap = Open menu (Prompt / Ready for Publish / Exit)';
+    const footer = '\n\nDouble-tap for menu';
     const full = header + research.content + footer;
     this.ui.researchPages = this.buildPages(full);
     this.ui.researchPageIndex = 0;
@@ -477,8 +476,7 @@ export class EvenPublisherClient {
     this.currentResearchId = research.id;
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
     const header = `${research.title}\n\nPublish delay (days): ${delay}\n\n`;
-    const footer =
-      '\nScroll = Read more\nTap = +1 day (max 10)\nScroll up at top = -1 day\nDouble-tap = Publish\nLong-press / back gesture = Cancel';
+    const footer = '\n\nDouble-tap for menu';
 
     const full = header + research.content + footer;
     this.ui.readyPages = this.buildPages(full);
@@ -510,8 +508,7 @@ export class EvenPublisherClient {
   private async updateReadyDelayText(research: Research): Promise<void> {
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
     const header = `${research.title}\n\nPublish delay (days): ${delay}\n\n`;
-    const footer =
-      '\nScroll = Read more\nTap = +1 day (max 10)\nScroll up at top = -1 day\nDouble-tap = Publish\nLong-press / back gesture = Cancel';
+    const footer = '\n\nDouble-tap for menu';
     const full = header + research.content + footer;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = clamp(this.ui.readyPageIndex, 0, this.ui.readyPages.length - 1);
@@ -707,14 +704,79 @@ export class EvenPublisherClient {
     }
   }
 
-  private async openPromptMenuForResearch(research: Research): Promise<void> {
-    await this.showTextFullScreen(
-      `${research.title}\n\n` +
-        'Prompt menu:\n' +
-        'Tap = Start / stop voice prompt (record)\n' +
-        'Scroll down = Mark as Ready for Publish\n' +
-        'Double-tap = Exit to main menu',
+  private async openReadyMenu(research: Research): Promise<void> {
+    this.ui.view = 'ready-menu';
+
+    const items = ['Publish now', 'Back to ready list', 'Back to main menu'];
+
+    const list = new ListContainerProperty({
+      containerID: 650,
+      containerName: 'ready-menu',
+      xPosition: 0,
+      yPosition: 0,
+      width: 576,
+      height: 288,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRdaius: 6,
+      paddingLength: 4,
+      isEventCapture: 1,
+      itemContainer: new ListItemContainerProperty({
+        itemCount: items.length,
+        itemWidth: 560,
+        isItemSelectBorderEn: 1,
+        itemName: items,
+      }),
+    });
+
+    await this.bridge.rebuildPageContainer(
+      new RebuildPageContainer({
+        containerTotalNum: 1,
+        listObject: [list],
+      }),
     );
+
+    setStatus('Ready menu: select an action.');
+  }
+
+  private async openResearchMenu(research: Research): Promise<void> {
+    this.ui.view = 'research-menu';
+
+    const items = [
+      'Start / stop voice prompt (record)',
+      'Mark as Ready for Publish',
+      'Back to draft list',
+      'Back to main menu',
+    ];
+
+    const list = new ListContainerProperty({
+      containerID: 350,
+      containerName: 'research-menu',
+      xPosition: 0,
+      yPosition: 0,
+      width: 576,
+      height: 288,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRdaius: 6,
+      paddingLength: 4,
+      isEventCapture: 1,
+      itemContainer: new ListItemContainerProperty({
+        itemCount: items.length,
+        itemWidth: 560,
+        isItemSelectBorderEn: 1,
+        itemName: items,
+      }),
+    });
+
+    await this.bridge.rebuildPageContainer(
+      new RebuildPageContainer({
+        containerTotalNum: 1,
+        listObject: [list],
+      }),
+    );
+
+    setStatus('Research menu: select an action.');
   }
 
   private async toggleVoicePromptRecording(research: Research): Promise<void> {
@@ -874,8 +936,30 @@ export class EvenPublisherClient {
       }
 
       if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-        await this.openPromptMenuForResearch(research);
-        this.ui.view = 'prompt-recording';
+        await this.openResearchMenu(research);
+        return;
+      }
+    }
+
+    if (this.ui.view === 'research-menu' && event.listEvent?.containerName === 'research-menu') {
+      const drafts = this.getDraftResearches();
+      const research = drafts[this.ui.researchSelectedIndex];
+      if (!research) {
+        await this.renderResearchList();
+        return;
+      }
+
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+        const idx = event.listEvent.currentSelectItemIndex ?? 0;
+        if (idx === 0) {
+          await this.toggleVoicePromptRecording(research);
+        } else if (idx === 1) {
+          await this.markResearchReady(research);
+        } else if (idx === 2) {
+          await this.renderResearchList();
+        } else if (idx === 3) {
+          await this.renderMainMenu();
+        }
         return;
       }
     }
@@ -903,7 +987,7 @@ export class EvenPublisherClient {
           await cancelSttRecording();
           this.isVoiceRecording = false;
         }
-        await this.renderMainMenu();
+        await this.renderResearchDetail(research);
         return;
       }
     }
@@ -960,7 +1044,28 @@ export class EvenPublisherClient {
       }
 
       if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-        await this.publishCurrentReadyResearch();
+        await this.openReadyMenu(research);
+        return;
+      }
+    }
+
+    if (this.ui.view === 'ready-menu' && event.listEvent?.containerName === 'ready-menu') {
+      const ready = this.getReadyResearches();
+      const research = ready[this.ui.readySelectedIndex];
+      if (!research) {
+        await this.renderReadyList();
+        return;
+      }
+
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+        const idx = event.listEvent.currentSelectItemIndex ?? 0;
+        if (idx === 0) {
+          await this.publishCurrentReadyResearch();
+        } else if (idx === 1) {
+          await this.renderReadyList();
+        } else if (idx === 2) {
+          await this.renderMainMenu();
+        }
         return;
       }
     }

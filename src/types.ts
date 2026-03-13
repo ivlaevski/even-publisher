@@ -44,8 +44,10 @@ export type ViewName =
   | 'new-research-detail'
   | 'research-list'
   | 'research-detail'
+  | 'research-menu'
   | 'ready-list'
   | 'ready-detail'
+  | 'ready-menu'
   | 'prompt-recording'
   | 'error';
 
