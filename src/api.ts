@@ -22,6 +22,10 @@ async function callOpenAi<T>(config: PublisherConfig, body: unknown): Promise<T>
   return json as T;
 }
 
+function normalizeDashes(input: string): string {
+  return input.replace(/\u2014/g, ' - ');
+}
+
 export async function fetchLatestAiNews(config: PublisherConfig): Promise<AiNewsItem[]> {
   const prompt =
     'Provide the 5 most recent news events related to Artificial Intelligence.\n' +
@@ -66,14 +70,18 @@ export async function fetchLatestAiNews(config: PublisherConfig): Promise<AiNews
     throw new Error('Expected OpenAI response to be a JSON array');
   }
 
-  return (parsed as any[]).map((item) => ({
-    title: String(item.title ?? ''),
-    description: String(item.description ?? ''),
-    personas: item.personas ?? [],
-    eventDateTime: item.eventDateTime ? String(item.eventDateTime) : undefined,
-    sourceUrl: item.sourceUrl ? String(item.sourceUrl) : undefined,
-    raw: item,
-  }));
+  return (parsed as any[]).map((item) => {
+    const rawTitle = String(item.title ?? '');
+    const rawDescription = String(item.description ?? '');
+    return {
+      title: normalizeDashes(rawTitle),
+      description: normalizeDashes(rawDescription),
+      personas: item.personas ?? [],
+      eventDateTime: item.eventDateTime ? String(item.eventDateTime) : undefined,
+      sourceUrl: item.sourceUrl ? String(item.sourceUrl) : undefined,
+      raw: item,
+    };
+  });
 }
 
 export async function elaborateResearch(
