@@ -793,6 +793,10 @@ export class EvenPublisherClient {
       try {
         await startSttRecording(this.bridge);
         this.isVoiceRecording = true;
+        this.ui.view = 'prompt-recording';
+        await this.showTextFullScreen(
+          `${research.title}\n\nListening… tap to stop, double-tap to exit.`,
+        );
         setStatus('Voice prompt: listening… tap to stop, double-tap to exit.');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -974,17 +978,11 @@ export class EvenPublisherClient {
 
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         if (this.isVoiceRecording) {
-          await cancelSttRecording();
-          this.isVoiceRecording = false;
+          await this.toggleVoicePromptRecording(research);
         }
-        await this.renderMainMenu();
+        await this.renderResearchDetail(research);
         return;
-      }
-
-      if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
-        await this.markResearchReady(research);
-        return;
-      }
+      }      
 
       if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
         if (this.isVoiceRecording) {
