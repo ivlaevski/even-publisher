@@ -52,7 +52,8 @@
       }
 
       input,
-      select {
+      select,
+      textarea {
         width: 100%;
         padding: 0.45rem 0.55rem;
         border-radius: 0.45rem;
@@ -191,6 +192,22 @@
         <section class="card">
           <h2>AI &amp; Publishing Settings</h2>
           <p class="muted">Stored only on this phone, used for API calls from this WebView.</p>
+
+          <div id="research-status" class="muted" style="margin-bottom: 0.5rem;">
+            No research selected on glasses.
+          </div>
+
+          <label for="prompt-text">Prompt to update current research</label>
+          <textarea
+            id="prompt-text"
+            rows="3"
+            placeholder="Example: Make the tone more optimistic and add a short call-to-action at the end."
+          ></textarea>
+
+          <div class="btn-row">
+            <button id="prompt-submit" class="btn btn-primary">Apply prompt to research</button>
+            <button id="use-transcript" class="btn btn-ghost">Use last voice transcript</button>
+          </div>
 
           <label for="openai-key">OpenAI API key</label>
           <input id="openai-key" type="password" autocomplete="off" />

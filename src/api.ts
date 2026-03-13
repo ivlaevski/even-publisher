@@ -134,6 +134,40 @@ export async function elaborateResearch(
   return content.trim();
 }
 
+export async function refineResearch(
+  config: PublisherConfig,
+  research: Research,
+  prompt: string,
+): Promise<string> {
+  const instruction =
+    'Update the given LinkedIn message with the following changes.\n' +
+    '- Keep the tone and voice consistent with the original message.\n' +
+    '- Apply only the requested changes; do not rewrite everything from scratch unless explicitly asked.\n' +
+    '- Preserve any links, emojis and hashtags unless the requested changes say otherwise.\n' +
+    '- Return only the updated LinkedIn message as plain text (no markdown, no JSON).';
+
+  const bodyText =
+    `${instruction}\n\n` +
+    `Message:\n${research.content}\n\n` +
+    `Changes:\n${prompt}\n`;
+
+  const response = await callOpenAi<{
+    choices: { message: { content?: string } }[];
+  }>(config, {
+    model: config.openAiModel || 'gpt-4.1-mini',
+    messages: [
+      {
+        role: 'user',
+        content: bodyText,
+      },
+    ],
+    temperature: 0.7,
+  });
+
+  const content = response.choices?.[0]?.message?.content ?? '';
+  return content.trim();
+}
+
 export async function publishToWordPress(
   config: PublisherConfig,
   research: Research,

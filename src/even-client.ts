@@ -12,7 +12,7 @@ import {
 
 import type { AiNewsItem, PublisherConfig, Research, ViewName } from './types';
 import { appendEventLog, clamp, generateId, loadConfigFromLocalStorage, setStatus } from './utils';
-import { elaborateResearch, fetchLatestAiNews, publishToWordPress } from './api';
+import { elaborateResearch, fetchLatestAiNews, publishToWordPress, refineResearch } from './api';
 import { cancelSttRecording, feedSttAudio, startSttRecording, stopSttAndTranscribe } from './stt-elevenlabs';
 
 const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
@@ -57,6 +57,7 @@ export class EvenPublisherClient {
     readyPageIndex: 0,
   };
   private isVoiceRecording = false;
+  private currentResearchId: string | null = null;
 
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
@@ -402,6 +403,7 @@ export class EvenPublisherClient {
 
   private async renderResearchDetail(research: Research): Promise<void> {
     this.ui.view = 'research-detail';
+    this.currentResearchId = research.id;
     const header = `${research.title}\n\n`;
     const footer =
       '\n\nScroll = Read more\nDouble-tap = Open menu (Prompt / Ready for Publish / Exit)';
@@ -472,6 +474,7 @@ export class EvenPublisherClient {
 
   private async renderReadyDetail(research: Research): Promise<void> {
     this.ui.view = 'ready-detail';
+    this.currentResearchId = research.id;
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
     const header = `${research.title}\n\nPublish delay (days): ${delay}\n\n`;
     const footer =
@@ -615,7 +618,69 @@ export class EvenPublisherClient {
 
   private async removeResearch(research: Research): Promise<void> {
     this.state.researches = this.state.researches.filter((r) => r.id !== research.id);
+    if (this.currentResearchId === research.id) {
+      this.currentResearchId = null;
+    }
     await this.saveResearches();
+  }
+
+  public getCurrentResearch(): Research | null {
+    if (!this.currentResearchId) return null;
+    return this.state.researches.find((r) => r.id === this.currentResearchId) ?? null;
+  }
+
+  public async applyPromptToCurrentResearch(prompt: string): Promise<void> {
+    const trimmed = prompt.trim();
+    if (!trimmed) {
+      setStatus('Prompt is empty. Type changes first.');
+      return;
+    }
+
+    const research = this.getCurrentResearch();
+    if (!research) {
+      setStatus('No active research selected on glasses.');
+      return;
+    }
+
+    const config = this.getConfig();
+    if (!config.openAiApiKey) {
+      await this.showTextFullScreen(
+        'OpenAI API key missing.\n\nSet the key on the phone screen, then try again.',
+      );
+      return;
+    }
+
+    try {
+      setStatus('Updating research with AI prompt…');
+      appendEventLog(`Applying prompt to research "${research.title}"`);
+      const updatedContent = await refineResearch(config, research, trimmed);
+
+      const idx = this.state.researches.findIndex((r) => r.id === research.id);
+      if (idx === -1) return;
+
+      const now = new Date().toISOString();
+      const updated: Research = {
+        ...this.state.researches[idx],
+        content: updatedContent,
+        updatedAt: now,
+      };
+      this.state.researches[idx] = updated;
+      await this.saveResearches();
+
+      if (this.ui.view === 'research-detail') {
+        await this.renderResearchDetail(updated);
+      } else if (this.ui.view === 'ready-detail') {
+        await this.renderReadyDetail(updated);
+      }
+
+      setStatus('Research updated from prompt.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.showTextFullScreen(
+        `Failed to apply prompt to research.\n\n${message}\n\nTap to continue.`,
+      );
+      this.ui.view = 'error';
+    }
   }
 
   private async publishCurrentReadyResearch(): Promise<void> {
@@ -685,6 +750,12 @@ export class EvenPublisherClient {
           `${research.title}\n\nNo speech captured.\n\nSpeak for a bit longer and try again.`,
         );
         return;
+      }
+
+      try {
+        localStorage.setItem('even-publisher:last-transcript', transcript);
+      } catch {
+        // ignore storage errors
       }
 
       await this.showTextFullScreen(
