@@ -25,7 +25,10 @@ function bootSettingsUi(): void {
   const promptTextarea = document.getElementById('prompt-text') as HTMLTextAreaElement | null;
   const promptSubmitBtn = document.getElementById('prompt-submit') as HTMLButtonElement | null;
   const useTranscriptBtn = document.getElementById('use-transcript') as HTMLButtonElement | null;
-  const topicsTextarea = document.getElementById('topics-list') as HTMLTextAreaElement | null;
+  const topicsListEl = document.getElementById('topics-list') as HTMLUListElement | null;
+  const newTopicInput = document.getElementById('new-topic') as HTMLInputElement | null;
+  const topicsAddBtn = document.getElementById('topics-add') as HTMLButtonElement | null;
+  const topicsDeleteBtn = document.getElementById('topics-delete') as HTMLButtonElement | null;
   const topicsSaveBtn = document.getElementById('topics-save') as HTMLButtonElement | null;
 
   if (openAiKeyInput) openAiKeyInput.value = config.openAiApiKey;
@@ -35,10 +38,26 @@ function bootSettingsUi(): void {
   if (wpUserInput) wpUserInput.value = config.wordpressUsername;
   if (wpPassInput) wpPassInput.value = config.wordpressPassword;
 
-  const topics = loadTopicsFromLocalStorage();
-  if (topicsTextarea) {
-    topicsTextarea.value = topics.join('\n');
-  }
+  let topics = loadTopicsFromLocalStorage();
+
+  const renderTopicsList = () => {
+    if (!topicsListEl) return;
+    topicsListEl.innerHTML = '';
+    topics.forEach((topic, index) => {
+      const li = document.createElement('li');
+      li.textContent = topic;
+      li.dataset.index = String(index);
+      li.addEventListener('click', () => {
+        if (!topicsListEl) return;
+        const children = Array.from(topicsListEl.querySelectorAll('li'));
+        children.forEach((child) => child.classList.remove('selected'));
+        li.classList.add('selected');
+      });
+      topicsListEl.appendChild(li);
+    });
+  };
+
+  renderTopicsList();
 
   saveBtn?.addEventListener('click', () => {
     const next = {
@@ -54,14 +73,44 @@ function bootSettingsUi(): void {
     setStatus('Settings saved. You can now start a new research from glasses.');
   });
 
+  topicsAddBtn?.addEventListener('click', () => {
+    const value = newTopicInput?.value.trim() ?? '';
+    if (!value) {
+      setStatus('Topic is empty. Type a name first.');
+      return;
+    }
+    if (!topics.includes(value)) {
+      topics = [...topics, value];
+      saveTopicsToLocalStorage(topics);
+      renderTopicsList();
+      appendEventLog(`Topic added: ${value}`);
+    }
+    if (newTopicInput) {
+      newTopicInput.value = '';
+    }
+  });
+
+  topicsDeleteBtn?.addEventListener('click', () => {
+    if (!topicsListEl) return;
+    const selected = topicsListEl.querySelector('li.selected') as HTMLLIElement | null;
+    if (!selected) {
+      setStatus('No topic selected to delete.');
+      return;
+    }
+    const index = Number(selected.dataset.index ?? '-1');
+    if (index >= 0 && index < topics.length) {
+      const removed = topics[index];
+      topics = topics.filter((_, i) => i !== index);
+      saveTopicsToLocalStorage(topics);
+      renderTopicsList();
+      appendEventLog(`Topic deleted: ${removed}`);
+      setStatus(`Deleted topic: ${removed}`);
+    }
+  });
+
   topicsSaveBtn?.addEventListener('click', () => {
-    const raw = topicsTextarea?.value ?? '';
-    const list = raw
-      .split('\n')
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0);
-    saveTopicsToLocalStorage(list);
-    appendEventLog('Topics saved.');
+    saveTopicsToLocalStorage(topics);
+    appendEventLog('Topics list saved.');
     setStatus('Topics saved. They will be used when starting new research.');
   });
 

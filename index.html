@@ -120,6 +120,32 @@
         margin-top: 0.75rem;
       }
 
+      .topic-list {
+        list-style: none;
+        padding: 0;
+        margin: 0.35rem 0 0.25rem;
+        max-height: 120px;
+        overflow-y: auto;
+        border-radius: 0.5rem;
+        border: 1px solid #1f2937;
+        background: #020617;
+      }
+
+      .topic-list li {
+        padding: 0.35rem 0.55rem;
+        font-size: 0.8rem;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.8);
+        cursor: pointer;
+      }
+
+      .topic-list li:last-child {
+        border-bottom: none;
+      }
+
+      .topic-list li.selected {
+        background: rgba(79, 70, 229, 0.35);
+      }
+
       #status {
         margin-top: 1rem;
         padding: 0.75rem 0.9rem;
@@ -191,6 +217,18 @@
 
         <section class="card">
           <h2>Prompt Topics</h2>
+          <p class="muted">Manage the list of topics that will be available when starting new research on the glasses.</p>
+
+          <label for="new-topic">Add topic</label>
+          <input id="new-topic" type="text" placeholder="e.g. Artificial Intelligence, Quantum computing…" />
+
+          <ul id="topics-list" class="topic-list"></ul>
+
+          <div class="btn-row">
+            <button id="topics-add" class="btn btn-primary">Add topic</button>
+            <button id="topics-delete" class="btn btn-ghost">Delete selected</button>
+            <button id="topics-save" class="btn btn-ghost">Save list</button>
+          </div>
         </section>
 
         <section class="card">
