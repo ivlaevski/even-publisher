@@ -67,6 +67,20 @@ export function saveConfigToLocalStorage(config: {
   localStorage.setItem('even-publisher:elevenlabs-key', config.elevenLabsApiKey.trim());
 }
 
+export function loadTopicsFromLocalStorage(): string[] {
+  const raw = localStorage.getItem('even-publisher:topics') ?? '';
+  return raw
+    .split('\n')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+export function saveTopicsToLocalStorage(topics: string[]): void {
+  const normalized = topics.map((value) => value.trim()).filter((value) => value.length > 0);
+  const payload = normalized.join('\n');
+  localStorage.setItem('even-publisher:topics', payload);
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }

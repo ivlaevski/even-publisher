@@ -26,9 +26,14 @@ function normalizeDashes(input: string): string {
   return input.replace(/\u2014/g, ' - ');
 }
 
-export async function fetchLatestAiNews(config: PublisherConfig): Promise<AiNewsItem[]> {
+export async function fetchLatestAiNews(
+  config: PublisherConfig,
+  topicInput: string,
+): Promise<AiNewsItem[]> {
+  const defaultTopic = 'Artificial Intelligence';
+  const topic = (topicInput && topicInput.trim()) || defaultTopic;
   const prompt =
-    'Provide the 5 most recent news events related to Artificial Intelligence.\n' +
+    `Provide the 5 most recent news events related to ${topic}.\n` +
     ' \n' +
     'Requirements:\n' +
     '- Use reliable and recent sources.\n' +

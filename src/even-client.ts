@@ -11,7 +11,14 @@ import {
 } from '@evenrealities/even_hub_sdk';
 
 import type { AiNewsItem, PublisherConfig, Research, ViewName } from './types';
-import { appendEventLog, clamp, generateId, loadConfigFromLocalStorage, setStatus } from './utils';
+import {
+  appendEventLog,
+  clamp,
+  generateId,
+  loadConfigFromLocalStorage,
+  loadTopicsFromLocalStorage,
+  setStatus,
+} from './utils';
 import { elaborateResearch, fetchLatestAiNews, publishToWordPress, refineResearch, synthesizeSpeech } from './api';
 import { cancelSttRecording, feedSttAudio, startSttRecording, stopSttAndTranscribe } from './stt-elevenlabs';
 
@@ -36,6 +43,8 @@ type UiState = {
   researchPageIndex: number;
   readyPages: string[];
   readyPageIndex: number;
+  topics: string[];
+  selectedTopic: string | null;
 };
 
 export class EvenPublisherClient {
@@ -55,6 +64,8 @@ export class EvenPublisherClient {
     researchPageIndex: 0,
     readyPages: [],
     readyPageIndex: 0,
+    topics: [],
+    selectedTopic: null,
   };
   private isVoiceRecording = false;
   private currentResearchId: string | null = null;
@@ -68,6 +79,7 @@ export class EvenPublisherClient {
   async init(): Promise<void> {
     await this.ensureStartupUi();
     await this.loadResearches();
+    this.ui.topics = loadTopicsFromLocalStorage();
     await this.renderMainMenu();
 
     this.bridge.onEvenHubEvent((event) => {
@@ -310,6 +322,51 @@ export class EvenPublisherClient {
     await this.showTextFullScreen(message);
   }
 
+  private async renderTopicSelect(): Promise<void> {
+    this.ui.view = 'topic-select';
+    const topics = this.ui.topics;
+
+    if (!topics.length) {
+      await this.showTextFullScreen(
+        'No topics defined on phone.\n\nUse the phone screen to add topics, then try again.',
+      );
+      this.ui.view = 'error';
+      return;
+    }
+
+    const items = topics.map((topic, index) => `${index + 1}. ${topic}`);
+    items.push('⟵ Back to main menu');
+
+    const list = new ListContainerProperty({
+      containerID: 150,
+      containerName: 'topic-select',
+      xPosition: 0,
+      yPosition: 0,
+      width: 576,
+      height: 288,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRdaius: 6,
+      paddingLength: 4,
+      isEventCapture: 1,
+      itemContainer: new ListItemContainerProperty({
+        itemCount: items.length,
+        itemWidth: 560,
+        isItemSelectBorderEn: 1,
+        itemName: items,
+      }),
+    });
+
+    await this.bridge.rebuildPageContainer(
+      new RebuildPageContainer({
+        containerTotalNum: 1,
+        listObject: [list],
+      }),
+    );
+
+    setStatus('Select a topic, then tap to continue.');
+  }
+
   private async renderAiNewsList(): Promise<void> {
     this.ui.view = 'new-research-list';
     if (this.ui.aiNews.length === 0) {
@@ -355,7 +412,7 @@ export class EvenPublisherClient {
       }),
     );
 
-    setStatus('AI results: swipe to change, tap to inspect, double-tap to go back.');
+    setStatus('News results: swipe to change, tap to inspect, double-tap to go back.');
   }
 
   private async renderAiNewsDetail(): Promise<void> {
@@ -572,11 +629,20 @@ export class EvenPublisherClient {
       return;
     }
 
-    await this.renderNewResearchLoading('Loading AI news…');
+    this.ui.topics = loadTopicsFromLocalStorage();
+    if (this.ui.topics.length > 0 && !this.ui.selectedTopic) {
+      await this.renderTopicSelect();
+      return;
+    }
+
+    const topic = (this.ui.selectedTopic ?? 'Artificial Intelligence').trim() || 'Artificial Intelligence';
+
+    await this.renderNewResearchLoading(`Loading news for "${topic}"…`);
 
     try {
-      this.ui.aiNews = await fetchLatestAiNews(config);
+      this.ui.aiNews = await fetchLatestAiNews(config, topic);
       this.ui.aiSelectedIndex = 0;
+      this.ui.selectedTopic = null;
       await this.renderAiNewsList();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -988,6 +1054,21 @@ export class EvenPublisherClient {
         await this.handleMainMenuSelect(idx);
       }
       return;
+    }
+
+    if (this.ui.view === 'topic-select' && event.listEvent?.containerName === 'topic-select') {
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+        const topics = this.ui.topics;
+        const idx = event.listEvent.currentSelectItemIndex ?? 0;
+        if (idx >= topics.length) {
+          await this.renderMainMenu();
+        } else {
+          const topic = topics[idx];
+          this.ui.selectedTopic = topic;
+          await this.startNewResearchFlow();
+        }
+        return;
+      }
     }
 
     if (this.ui.view === 'new-research-list') {

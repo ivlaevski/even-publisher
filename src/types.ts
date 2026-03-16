@@ -39,6 +39,7 @@ export interface PublisherConfig {
 
 export type ViewName =
   | 'main-menu'
+  | 'topic-select'
   | 'new-research-loading'
   | 'new-research-list'
   | 'new-research-detail'

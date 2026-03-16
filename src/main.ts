@@ -6,6 +6,8 @@ import {
   loadConfigFromLocalStorage,
   saveConfigToLocalStorage,
   setStatus,
+  loadTopicsFromLocalStorage,
+  saveTopicsToLocalStorage,
   withTimeout,
 } from './utils';
 
@@ -23,6 +25,8 @@ function bootSettingsUi(): void {
   const promptTextarea = document.getElementById('prompt-text') as HTMLTextAreaElement | null;
   const promptSubmitBtn = document.getElementById('prompt-submit') as HTMLButtonElement | null;
   const useTranscriptBtn = document.getElementById('use-transcript') as HTMLButtonElement | null;
+  const topicsTextarea = document.getElementById('topics-list') as HTMLTextAreaElement | null;
+  const topicsSaveBtn = document.getElementById('topics-save') as HTMLButtonElement | null;
 
   if (openAiKeyInput) openAiKeyInput.value = config.openAiApiKey;
   if (openAiModelInput) openAiModelInput.value = config.openAiModel;
@@ -30,6 +34,11 @@ function bootSettingsUi(): void {
   if (wpUrlInput) wpUrlInput.value = config.wordpressBaseUrl;
   if (wpUserInput) wpUserInput.value = config.wordpressUsername;
   if (wpPassInput) wpPassInput.value = config.wordpressPassword;
+
+  const topics = loadTopicsFromLocalStorage();
+  if (topicsTextarea) {
+    topicsTextarea.value = topics.join('\n');
+  }
 
   saveBtn?.addEventListener('click', () => {
     const next = {
@@ -43,6 +52,17 @@ function bootSettingsUi(): void {
     saveConfigToLocalStorage(next);
     appendEventLog('Settings saved.');
     setStatus('Settings saved. You can now start a new research from glasses.');
+  });
+
+  topicsSaveBtn?.addEventListener('click', () => {
+    const raw = topicsTextarea?.value ?? '';
+    const list = raw
+      .split('\n')
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+    saveTopicsToLocalStorage(list);
+    appendEventLog('Topics saved.');
+    setStatus('Topics saved. They will be used when starting new research.');
   });
 
   useTranscriptBtn?.addEventListener('click', () => {
