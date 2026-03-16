@@ -1120,7 +1120,8 @@ export class EvenPublisherClient {
       }
     }
 
-    if (this.ui.view === 'research-detail') {
+    // Handle research detail view (also fallback by container name, in case view flag desyncs).
+    if (this.ui.view === 'research-detail' || event.textEvent?.containerName === 'research-detail') {
       const drafts = this.getDraftResearches();
       const research = drafts[this.ui.researchSelectedIndex];
       if (!research) {
