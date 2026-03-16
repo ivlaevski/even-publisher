@@ -158,7 +158,7 @@ export class EvenPublisherClient {
       // +1 to account for the newline we add when joining (except possibly last)
       const extra = line.length + (currentLines.length > 0 ? 1 : 0);
       if (currentLength + extra > MAX_CONTENT_LENGTH && currentLines.length > 0) {
-        pages.push(currentLines.join('\n')+'...[page break; next page index: '+pages.length+']\n\n');
+        pages.push(currentLines.join('\n')+'... [ page break; next page number: ' + (pages.length+1) + ']\n\n');
         currentLines = [line];
         currentLength = line.length;
       } else {
@@ -168,7 +168,7 @@ export class EvenPublisherClient {
     }
 
     if (currentLines.length > 0) {
-      pages.push(currentLines.join('\n')+'...[end]\n\n');
+      pages.push(currentLines.join('\n')+'... [ end ]\n\n');
     }
 
     return pages;
