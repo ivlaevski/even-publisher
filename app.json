@@ -1,12 +1,12 @@
 {
-  "package_id": "com.evenrealities.even_publisher",
+  "package_id": "com.vlaevski.even_publisher",
   "edition": "202603",
   "name": "even-publisher",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "min_app_version": "0.1.0",
-  "tagline": "Draft and publish AI-powered LinkedIn posts from G2 glasses",
+  "tagline": "Draft and publish AI-powered WordPress posts from G2 glasses",
   "description": "Even Publisher lets you start new AI-assisted researches from your G2 glasses, iterate on drafts via voice prompts, mark them ready for publishing, and schedule WordPress posts using settings provided on the phone screen.",
-  "author": "Even Realities",
+  "author": "Ivan Vlaevski",
   "entrypoint": "index.html",
   "permissions": {
     "network": [
