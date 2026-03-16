@@ -46,10 +46,12 @@ export type ViewName =
   | 'research-list'
   | 'research-detail'
   | 'research-menu'
+  | 'confirm-cancel-research'
   | 'research-read-aloud'
   | 'ready-list'
   | 'ready-detail'
   | 'ready-menu'
+  | 'confirm-cancel-ready'
   | 'prompt-recording'
   | 'error';
 

@@ -74,6 +74,7 @@ export class EvenPublisherClient {
   private currentLineToRead: string | null = null;
   private readAloudLines: string[] = [];
   private readAloudLineIndex = 0;
+  private cancelMode: 'draft' | 'ready' | null = null;
 
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
@@ -293,9 +294,9 @@ export class EvenPublisherClient {
       containerID: 100,
       containerName: 'main-menu',
       xPosition: 0,
-      yPosition: 0,
+      yPosition: 80,
       width: 576,
-      height: 288,
+      height: 176,
       borderWidth: 1,
       borderColor: 5,
       borderRdaius: 6,
@@ -311,7 +312,39 @@ export class EvenPublisherClient {
 
     await this.bridge.rebuildPageContainer(
       new RebuildPageContainer({
-        containerTotalNum: 1,
+        containerTotalNum: 4,
+        textObject: [
+          new TextContainerProperty({
+            containerID: 90,
+            containerName: 'main-menu-title',
+            xPosition: 0,
+            yPosition: 10,
+            width: 576,
+            height: 32,
+            content: 'EvenPublisher',
+            isEventCapture: 0,
+          }),
+          new TextContainerProperty({
+            containerID: 91,
+            containerName: 'main-menu-subtitle',
+            xPosition: 0,
+            yPosition: 42,
+            width: 576,
+            height: 24,
+            content: 'by Ivan Vlaevski v.1.0',
+            isEventCapture: 0,
+          }),
+          new TextContainerProperty({
+            containerID: 92,
+            containerName: 'main-menu-footer',
+            xPosition: 260,
+            yPosition: 260,
+            width: 316,
+            height: 24,
+            content: 'Revolute to @ivanvlaevski',
+            isEventCapture: 0,
+          }),
+        ],
         listObject: [list],
       }),
     );
@@ -803,7 +836,7 @@ export class EvenPublisherClient {
   private async openReadyMenu(research: Research): Promise<void> {
     this.ui.view = 'ready-menu';
 
-    const items = ['Publish now', 'Back to ready list', 'Back to main menu'];
+    const items = ['Publish now', 'Cancel publishing', 'Back to ready list', 'Back to main menu'];
 
     const list = new ListContainerProperty({
       containerID: 650,
@@ -835,6 +868,63 @@ export class EvenPublisherClient {
     setStatus('Ready menu: select an action.');
   }
 
+  private async openConfirmCancelResearch(research: Research, mode: 'draft' | 'ready'): Promise<void> {
+    this.cancelMode = mode;
+    this.currentResearchId = research.id;
+    const isReady = mode === 'ready';
+    this.ui.view = isReady ? 'confirm-cancel-ready' : 'confirm-cancel-research';
+
+    const question = isReady
+      ? `Cancel publishing and remove this research?\n\n${research.title}`
+      : `Cancel research and remove it from drafts?\n\n${research.title}`;
+
+    const items = ['Yes', 'No'];
+
+    const list = new ListContainerProperty({
+      containerID: isReady ? 751 : 351,
+      containerName: isReady ? 'confirm-cancel-ready' : 'confirm-cancel-research',
+      xPosition: 0,
+      yPosition: 0,
+      width: 576,
+      height: 288,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRdaius: 6,
+      paddingLength: 4,
+      isEventCapture: 1,
+      itemContainer: new ListItemContainerProperty({
+        itemCount: items.length,
+        itemWidth: 560,
+        isItemSelectBorderEn: 1,
+        itemName: items.map((label, idx) => `${idx + 1}. ${label}`),
+      }),
+    });
+
+    await this.bridge.rebuildPageContainer(
+      new RebuildPageContainer({
+        containerTotalNum: 2,
+        textObject: [
+          new TextContainerProperty({
+            containerID: isReady ? 750 : 350,
+            containerName: isReady ? 'confirm-cancel-ready-text' : 'confirm-cancel-research-text',
+            xPosition: 0,
+            yPosition: 0,
+            width: 576,
+            height: 144,
+            borderWidth: 0,
+            borderColor: 5,
+            paddingLength: 4,
+            content: this.sanitizeForDisplay(question),
+            isEventCapture: 0,
+          }),
+        ],
+        listObject: [list],
+      }),
+    );
+
+    setStatus(isReady ? 'Confirm cancel publishing (Yes / No).' : 'Confirm cancel research (Yes / No).');
+  }
+
   private async openResearchMenu(research: Research): Promise<void> {
     this.ui.view = 'research-menu';
 
@@ -842,6 +932,7 @@ export class EvenPublisherClient {
       'Read aloud',
       'Start / stop voice prompt (record)',
       'Mark as Ready for Publish',
+      'Cancel research',
       'Back to draft list',
       'Back to main menu',
     ];
@@ -1194,8 +1285,10 @@ export class EvenPublisherClient {
         } else if (idx === 2) {
           await this.markResearchReady(research);
         } else if (idx === 3) {
-          await this.renderResearchList();
+          await this.openConfirmCancelResearch(research, 'draft');
         } else if (idx === 4) {
+          await this.renderResearchList();
+        } else if (idx === 5) {
           await this.renderMainMenu();
         }
         return;
@@ -1350,9 +1443,44 @@ export class EvenPublisherClient {
         if (idx === 0) {
           await this.publishCurrentReadyResearch();
         } else if (idx === 1) {
-          await this.renderReadyList();
+          await this.openConfirmCancelResearch(research, 'ready');
         } else if (idx === 2) {
+          await this.renderReadyList();
+        } else if (idx === 3) {
           await this.renderMainMenu();
+        }
+        return;
+      }
+    }
+
+    if (
+      (this.ui.view === 'confirm-cancel-research' &&
+        event.listEvent?.containerName === 'confirm-cancel-research') ||
+      (this.ui.view === 'confirm-cancel-ready' &&
+        event.listEvent?.containerName === 'confirm-cancel-ready')
+    ) {
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+        const idx = event.listEvent.currentSelectItemIndex ?? 0;
+        const research = this.getCurrentResearch();
+        const mode = this.cancelMode;
+        this.cancelMode = null;
+
+        if (!research || !mode) {
+          await this.renderMainMenu();
+          return;
+        }
+
+        if (idx === 0) {
+          // Yes
+          await this.removeResearch(research);
+          await this.renderMainMenu();
+        } else {
+          // No
+          if (mode === 'draft') {
+            await this.renderResearchDetail(research);
+          } else {
+            await this.renderReadyDetail(research);
+          }
         }
         return;
       }
