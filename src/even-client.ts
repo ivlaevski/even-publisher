@@ -71,6 +71,7 @@ export class EvenPublisherClient {
   private currentResearchId: string | null = null;
   private readAloudAborted = false;
   private currentReadAloudAudio: HTMLAudioElement | null = null;
+  private currentLineToRead: string | null = null;
   private readAloudLines: string[] = [];
   private readAloudLineIndex = 0;
 
@@ -954,9 +955,14 @@ export class EvenPublisherClient {
 
   private playLineAsAudio(config: PublisherConfig, line: string, research: Research): Promise<void> {
     return new Promise((resolve, reject) => {
+      this.currentLineToRead = line;
       synthesizeSpeech(config, line)
         .then((arrayBuffer) => {
           if (this.readAloudAborted) {
+            resolve();
+            return;
+          }
+          if (this.currentLineToRead !== line) {
             resolve();
             return;
           }
