@@ -151,7 +151,7 @@ async function main() {
   let client: EvenPublisherClient | null = null;
   let statusTimer: number | null = null;
 
-  connectBtn?.addEventListener('click', async () => {
+  const connect = async () => {
     if (client) {
       setStatus('Already connected.');
       return;
@@ -181,6 +181,14 @@ async function main() {
       setStatus(`Bridge not available: ${message}\n\nRunning in browser-only mode.`);
       appendEventLog(`Bridge connection failed: ${message}`);
     }
+  };
+
+  // Auto-connect on load
+  void connect();
+
+  // Keep button as manual retry
+  connectBtn?.addEventListener('click', () => {
+    void connect();
   });
 
   actionBtn?.addEventListener('click', () => {
