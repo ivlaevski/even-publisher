@@ -906,7 +906,7 @@ export class EvenPublisherClient {
 
     const line = lines[this.readAloudLineIndex] ?? '';
     const display = this.sanitizeForDisplay(
-      `${research.title}\n\n${line}\n\nTap = pause · Scroll down = next line · Scroll up = replay · Double-tap = back`,
+      `${line}\n\nTap = pause · Scroll down = next line · Scroll up = replay · Double-tap = back`,
     );
 
     await this.bridge.rebuildPageContainer(
@@ -962,18 +962,13 @@ export class EvenPublisherClient {
             this.currentReadAloudAudio = null;
             if (
               this.readAloudAborted ||
-              this.ui.view !== 'research-read-aloud' ||
-              !this.readAloudLines.length
+              this.ui.view !== 'research-read-aloud' 
             ) {
               resolve();
               return;
             }
-            this.readAloudLineIndex += 1;
-            if (this.readAloudLineIndex >= this.readAloudLines.length) {
-              void this.finishReadAloud(research);
-            } else {
-              void this.renderReadAloudCurrentLine(research);
-            }
+            this.readAloudLineIndex += 1;            
+            void this.renderReadAloudCurrentLine(research);
             resolve();
           };
           audio.onerror = () => {
@@ -1204,8 +1199,13 @@ export class EvenPublisherClient {
 
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         if (this.currentReadAloudAudio) {
-          this.currentReadAloudAudio.pause();
-          setStatus('Read aloud paused. Scroll to continue or double-tap to exit.');
+          if (this.currentReadAloudAudio.paused) {
+            this.currentReadAloudAudio.play();
+            setStatus('Read aloud resumed. Scroll to pause or double-tap to exit.');
+          } else {
+            this.currentReadAloudAudio.pause();
+            setStatus('Read aloud paused. Scroll to continue or double-tap to exit.');
+          }
         }
         return;
       }
@@ -1221,6 +1221,10 @@ export class EvenPublisherClient {
           this.currentReadAloudAudio.currentTime = 0;
           this.currentReadAloudAudio = null;
         }
+        this.readAloudLineIndex -= 1; 
+        if (this.readAloudLineIndex < 0) {
+          this.readAloudLineIndex = 0;
+        }
         await this.renderReadAloudCurrentLine(research);
         return;
       }
@@ -1231,12 +1235,8 @@ export class EvenPublisherClient {
           this.currentReadAloudAudio.currentTime = 0;
           this.currentReadAloudAudio = null;
         }
-        this.readAloudLineIndex += 1;
-        if (this.readAloudLineIndex >= this.readAloudLines.length) {
-          await this.finishReadAloud(research);
-        } else {
-          await this.renderReadAloudCurrentLine(research);
-        }
+        this.readAloudLineIndex += 1;        
+        await this.renderReadAloudCurrentLine(research);
         return;
       }
     }
