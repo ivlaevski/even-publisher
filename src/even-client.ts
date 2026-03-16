@@ -71,6 +71,8 @@ export class EvenPublisherClient {
   private currentResearchId: string | null = null;
   private readAloudAborted = false;
   private currentReadAloudAudio: HTMLAudioElement | null = null;
+  private readAloudLines: string[] = [];
+  private readAloudLineIndex = 0;
 
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
@@ -887,61 +889,63 @@ export class EvenPublisherClient {
     this.ui.view = 'research-read-aloud';
     this.readAloudAborted = false;
     const fullText = `${research.title}\n\n${research.content}`;
-    const pageLines = this.buildPagesAsLines(fullText);
-    const footer = '\n\nTap to stop';
+    this.readAloudLines = fullText.split('\n').map((line) => line.trim());
+    this.readAloudLineIndex = 0;
 
-    setStatus('Read aloud: playing on phone. Tap on glasses to stop.');
+    setStatus('Read aloud: line by line. Tap = pause, scroll to control playback.');
 
-    for (let pageIndex = 0; pageIndex < pageLines.length && !this.readAloudAborted; pageIndex += 1) {
-      const lines = pageLines[pageIndex];
-      const pageText = lines.join('\n') + footer;
-      const displayText = this.sanitizeForDisplay(pageText);
-
-      await this.bridge.rebuildPageContainer(
-        new RebuildPageContainer({
-          containerTotalNum: 1,
-          textObject: [
-            new TextContainerProperty({
-              containerID: 400,
-              containerName: 'research-detail',
-              xPosition: 0,
-              yPosition: 0,
-              width: 576,
-              height: 288,
-              borderWidth: 0,
-              borderColor: 5,
-              paddingLength: 4,
-              content: displayText,
-              isEventCapture: 1,
-            }),
-          ],
-        }),
-      );
-
-      for (let i = 0; i < lines.length && !this.readAloudAborted; i += 1) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        try {
-          await this.playLineAsAudio(config, line);
-        } catch (err) {
-          appendEventLog(`Read aloud TTS error: ${err instanceof Error ? err.message : String(err)}`);
-          if (!this.readAloudAborted) {
-            await this.showTextFullScreen(
-              `Read aloud failed.\n\n${err instanceof Error ? err.message : String(err)}\n\nTap to return to menu.`,
-            );
-          }
-          break;
-        }
-      }
-    }
-
-    this.currentReadAloudAudio = null;
-    const drafts = this.getDraftResearches();
-    const r = drafts[this.ui.researchSelectedIndex];
-    if (r) await this.openResearchMenu(r);
+    await this.renderReadAloudCurrentLine(research);
   }
 
-  private playLineAsAudio(config: PublisherConfig, line: string): Promise<void> {
+  private async renderReadAloudCurrentLine(research: Research): Promise<void> {
+    const lines = this.readAloudLines;
+    if (!lines.length || this.readAloudLineIndex < 0 || this.readAloudLineIndex >= lines.length) {
+      await this.finishReadAloud(research);
+      return;
+    }
+
+    const line = lines[this.readAloudLineIndex] ?? '';
+    const display = this.sanitizeForDisplay(
+      `${research.title}\n\n${line}\n\nTap = pause · Scroll down = next line · Scroll up = replay · Double-tap = back`,
+    );
+
+    await this.bridge.rebuildPageContainer(
+      new RebuildPageContainer({
+        containerTotalNum: 1,
+        textObject: [
+          new TextContainerProperty({
+            containerID: 400,
+            containerName: 'research-detail',
+            xPosition: 0,
+            yPosition: 0,
+            width: 576,
+            height: 288,
+            borderWidth: 0,
+            borderColor: 5,
+            paddingLength: 4,
+            content: display,
+            isEventCapture: 1,
+          }),
+        ],
+      }),
+    );
+
+    const config = this.getConfig();
+    await this.playLineAsAudio(config, line, research);
+  }
+
+  private async finishReadAloud(research: Research): Promise<void> {
+    this.readAloudAborted = true;
+    if (this.currentReadAloudAudio) {
+      this.currentReadAloudAudio.pause();
+      this.currentReadAloudAudio.currentTime = 0;
+      this.currentReadAloudAudio = null;
+    }
+    this.ui.view = 'research-detail';
+    await this.renderResearchDetail(research);
+  }
+
+  private playLineAsAudio(config: PublisherConfig, line: string, research: Research): Promise<void> {
     return new Promise((resolve, reject) => {
       synthesizeSpeech(config, line)
         .then((arrayBuffer) => {
@@ -956,6 +960,20 @@ export class EvenPublisherClient {
           audio.onended = () => {
             URL.revokeObjectURL(url);
             this.currentReadAloudAudio = null;
+            if (
+              this.readAloudAborted ||
+              this.ui.view !== 'research-read-aloud' ||
+              !this.readAloudLines.length
+            ) {
+              resolve();
+              return;
+            }
+            this.readAloudLineIndex += 1;
+            if (this.readAloudLineIndex >= this.readAloudLines.length) {
+              void this.finishReadAloud(research);
+            } else {
+              void this.renderReadAloudCurrentLine(research);
+            }
             resolve();
           };
           audio.onerror = () => {
@@ -1177,16 +1195,48 @@ export class EvenPublisherClient {
     }
 
     if (this.ui.view === 'research-read-aloud') {
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === OsEventTypeList.DOUBLE_CLICK_EVENT || eventType === undefined) {
-        this.readAloudAborted = true;
+      const drafts = this.getDraftResearches();
+      const research = drafts[this.ui.researchSelectedIndex];
+      if (!research) {
+        await this.renderResearchList();
+        return;
+      }
+
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+        if (this.currentReadAloudAudio) {
+          this.currentReadAloudAudio.pause();
+          setStatus('Read aloud paused. Scroll to continue or double-tap to exit.');
+        }
+        return;
+      }
+
+      if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
+        await this.finishReadAloud(research);
+        return;
+      }
+
+      if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
         if (this.currentReadAloudAudio) {
           this.currentReadAloudAudio.pause();
           this.currentReadAloudAudio.currentTime = 0;
           this.currentReadAloudAudio = null;
         }
-        const drafts = this.getDraftResearches();
-        const research = drafts[this.ui.researchSelectedIndex];
-        if (research) await this.openResearchMenu(research);
+        await this.renderReadAloudCurrentLine(research);
+        return;
+      }
+
+      if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+        if (this.currentReadAloudAudio) {
+          this.currentReadAloudAudio.pause();
+          this.currentReadAloudAudio.currentTime = 0;
+          this.currentReadAloudAudio = null;
+        }
+        this.readAloudLineIndex += 1;
+        if (this.readAloudLineIndex >= this.readAloudLines.length) {
+          await this.finishReadAloud(research);
+        } else {
+          await this.renderReadAloudCurrentLine(research);
+        }
         return;
       }
     }
