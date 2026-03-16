@@ -888,7 +888,7 @@ export class EvenPublisherClient {
 
     this.ui.view = 'research-read-aloud';
     this.readAloudAborted = false;
-    const fullText = `${research.title}\n\n${research.content}`;
+    const fullText = `${research.title}\n${research.content}`;    
     this.readAloudLines = fullText.split('\n').map((line) => line.trim());
     this.readAloudLineIndex = 0;
 
@@ -905,6 +905,13 @@ export class EvenPublisherClient {
     }
 
     const line = lines[this.readAloudLineIndex] ?? '';
+
+    if (line.trim().length === 0) {
+      this.readAloudLineIndex += 1;
+      await this.renderReadAloudCurrentLine(research);
+      return;
+    }
+
     const display = this.sanitizeForDisplay(
       `${line}\n\nTap = pause · Scroll down = next line · Scroll up = replay · Double-tap = back`,
     );
@@ -915,7 +922,7 @@ export class EvenPublisherClient {
         textObject: [
           new TextContainerProperty({
             containerID: 400,
-            containerName: 'research-detail',
+            containerName: 'research-read-aloud',
             xPosition: 0,
             yPosition: 0,
             width: 576,
@@ -967,7 +974,7 @@ export class EvenPublisherClient {
               resolve();
               return;
             }
-            this.readAloudLineIndex += 1;            
+            this.readAloudLineIndex += 1;                        
             void this.renderReadAloudCurrentLine(research);
             resolve();
           };
