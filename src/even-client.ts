@@ -108,6 +108,8 @@ export class EvenPublisherClient {
   private async ensureStartupUi(): Promise<void> {
     if (this.isStartupCreated) return;
 
+    // SDK: exactly one container on the page must have isEventCapture=1; startup max 4 containers total.
+    // Full border/padding fields match host validation expectations (avoids StartUpPageCreateResult.invalid).
     const title = new TextContainerProperty({
       containerID: 1,
       containerName: 'title',
@@ -115,6 +117,10 @@ export class EvenPublisherClient {
       yPosition: 40,
       width: 576,
       height: 40,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRdaius: 0,
+      paddingLength: 2,
       content: 'Even Publisher',
       isEventCapture: 0,
     });
@@ -126,19 +132,48 @@ export class EvenPublisherClient {
       yPosition: 120,
       width: 576,
       height: 40,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRdaius: 0,
+      paddingLength: 2,
       content: 'Tap to open main menu',
       isEventCapture: 1,
     });
 
-    const result = await this.bridge.createStartUpPageContainer(
-      new CreateStartUpPageContainer({
-        containerTotalNum: 2,
-        textObject: [title, hint],
-      }),
-    );
+    const startupPayload = {
+      containerTotalNum: 2,
+      textObject: [title, hint],
+    };
+
+    const tryCreate = () =>
+      this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(startupPayload));
+
+    // Brief defer: bridge is sometimes not ready on first tick after auto-connect.
+    await new Promise((r) => setTimeout(r, 50));
+
+    let result = await tryCreate();
+    if (result !== 0) {
+      for (let attempt = 0; attempt < 3 && result !== 0; attempt += 1) {
+        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+        result = await tryCreate();
+      }
+    }
 
     if (result === 0) {
       this.isStartupCreated = true;
+      return;
+    }
+
+    // Host may already have a startup surface (e.g. reload); create returns invalid — try rebuild once.
+    appendEventLog(
+      `createStartUpPageContainer code=${result} (invalid); trying rebuildPageContainer fallback`,
+    );
+    const rebuilt = await this.bridge.rebuildPageContainer(
+      new RebuildPageContainer(startupPayload),
+    );
+    if (rebuilt) {
+      this.isStartupCreated = true;
+      appendEventLog('Startup UI ok via rebuildPageContainer fallback.');
     } else {
       appendEventLog(`Failed to create startup page: code=${result}`);
     }
