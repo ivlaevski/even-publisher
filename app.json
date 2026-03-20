@@ -1,6 +1,6 @@
 {
-  "package_id": "com.vlaevski.even_publisher",
-  "edition": "202603",
+  "package_id": "com.vlaevski.evenpublisher",
+  "edition": "202601",
   "name": "even-publisher",
   "version": "1.0.0",
   "min_app_version": "0.1.0",
@@ -8,13 +8,11 @@
   "description": "Even Publisher lets you start new AI-assisted researches from your G2 glasses, iterate on drafts via voice prompts, mark them ready for publishing, and schedule WordPress posts using settings provided on the phone screen.",
   "author": "Ivan Vlaevski",
   "entrypoint": "index.html",
-  "permissions": {
-    "network": [
-      "api.openai.com",
-      "openai.com",
-      "evenhub.evenrealities.com",
-      "your-wordpress-site.com"
-    ]
-  }
+  "min_sdk_version": "0.1.0",
+  "supported_languages": ["en"],
+  "permissions": [
+    "android.permission.INTERNET",
+    "android.permission.ACCESS_NETWORK_STATE"
+  ]
 }
 

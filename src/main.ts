@@ -184,7 +184,7 @@ async function main() {
   };
 
   // Auto-connect on load
-  void connect();
+  //void connect();
 
   // Keep button as manual retry
   connectBtn?.addEventListener('click', () => {
