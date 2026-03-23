@@ -83,8 +83,11 @@ export class EvenPublisherClient {
   }
 
   async init(): Promise<void> {
-    const initT0 = performance.now();
-    appendEventLog(`[startup] init() begin (${new Date().toISOString()})`);
+    await this.loadResearches();
+    this.ui.topics = loadTopicsFromLocalStorage();
+
+    await this.ensureStartupUi();
+    await this.renderMainMenu();
 
     this.bridge.onEvenHubEvent((event) => {
       void this.onEvenHubEvent(event);
@@ -94,22 +97,6 @@ export class EvenPublisherClient {
     // Calling too early often returns StartUpPageCreateResult.invalid (1) while the hub still shows placeholder UI.
     await this.waitForGlassesConnected(12000);
 
-    const tAfterWait = performance.now();
-    appendEventLog(`[startup] after waitForGlassesConnected: +${(tAfterWait - initT0).toFixed(0)}ms`);
-
-    await this.ensureStartupUi();
-
-    const tAfterStartup = performance.now();
-    appendEventLog(`[startup] after ensureStartupUi: +${(tAfterStartup - initT0).toFixed(0)}ms`);
-
-    appendEventLog('[startup] loadResearches…');
-    await this.loadResearches();
-    appendEventLog(`[startup] loadResearches done: +${(performance.now() - initT0).toFixed(0)}ms`);
-
-    this.ui.topics = loadTopicsFromLocalStorage();
-    appendEventLog('[startup] renderMainMenu…');
-    await this.renderMainMenu();
-    appendEventLog(`[startup] renderMainMenu done: +${(performance.now() - initT0).toFixed(0)}ms total`);
 
     setStatus('Even Publisher connected. Use glasses to navigate menu.');
   }
@@ -172,68 +159,6 @@ export class EvenPublisherClient {
    */
   private buildMainMenuPagePayload(): CreateStartUpPageContainer 
   {
-    //containerTotalNum: number;
-    //textObject: TextContainerProperty[];
-    //listObject: ListContainerProperty[];
-    //} {
-   /* const items = ['Start new research', 'Continue old research', 'Review Ready for Publishing'];
-
-    const list = new ListContainerProperty({
-      containerID: 100,
-      containerName: 'main-menu',
-      xPosition: 0,
-      yPosition: 80,
-      width: 576,
-      height: 176,
-      borderWidth: 1,
-      borderColor: 5,
-      borderRdaius: 6,
-      paddingLength: 4,
-      isEventCapture: 1,
-      itemContainer: new ListItemContainerProperty({
-        itemCount: items.length,
-        itemWidth: 560,
-        isItemSelectBorderEn: 1,
-        itemName: items,
-      }),
-    });
-
-    return {
-      containerTotalNum: 4,
-      textObject: [
-        new TextContainerProperty({
-          containerID: 90,
-          containerName: 'main-menu-title',
-          xPosition: 0,
-          yPosition: 10,
-          width: 576,
-          height: 32,
-          content: 'EvenPublisher',
-          isEventCapture: 0,
-        }),
-        new TextContainerProperty({
-          containerID: 91,
-          containerName: 'main-menu-subtitle',
-          xPosition: 0,
-          yPosition: 42,
-          width: 576,
-          height: 24,
-          content: 'by Ivan Vlaevski v.1.0',
-          isEventCapture: 0,
-        }),
-        new TextContainerProperty({
-          containerID: 92,
-          containerName: 'main-menu-footer',
-          xPosition: 260,
-          yPosition: 260,
-          width: 316,
-          height: 24,
-          content: 'Revolute to @ivanvlaevski',
-          isEventCapture: 0,
-        }),
-      ],
-      listObject: [list],
-    };*/
     const textContainer1 = new TextContainerProperty({
       xPosition: 10,
       yPosition: 10,
@@ -299,61 +224,42 @@ export class EvenPublisherClient {
   private async ensureStartupUi(): Promise<void> {
     if (this.isStartupCreated) return;
 
-    const d = await this.bridge.getDeviceInfo();
-    appendEventLog(
-      `[startup] ensureStartupUi: pre-create device connectType=${String(d?.status?.connectType ?? 'undefined')} sn=${d?.sn ?? '—'}`,
-    );
-
-    // SDK: exactly one container with isEventCapture=1 — the list. Same payload as renderMainMenu().
+    //const d = await this.bridge.getDeviceInfo();
+    //appendEventLog(
+    //  `[startup] ensureStartupUi: pre-create device connectType=${String(d?.status?.connectType ?? 'undefined')} sn=${d?.sn ?? '—'}`,
+    //);
+    
     const startupPayload = this.buildMainMenuPagePayload();
-
-    appendEventLog(
-      '[startup] createStartUpPageContainer: main-menu layout (containerTotalNum=4 list+3 text, capture on list)',
-    );
 
     const tryCreate = () =>
       this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(startupPayload));
 
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 50));
 
-    const tCreate0 = performance.now();
     let result = await tryCreate();
-    appendEventLog(
-      `[startup] createStartUpPageContainer attempt0: code=${result} (${this.startupResultLabel(result)}) +${(performance.now() - tCreate0).toFixed(0)}ms`,
-    );
-
     if (result !== 0) {
-      await new Promise((r) => setTimeout(r, 400));
-      const t1 = performance.now();
-      result = await tryCreate();
-      appendEventLog(
-        `[startup] createStartUpPageContainer retry1: code=${result} (${this.startupResultLabel(result)}) +${(performance.now() - t1).toFixed(0)}ms`,
-      );
+      for (let attempt = 0; attempt < 3 && result !== 0; attempt += 1) {
+        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+        result = await tryCreate();
+      }
     }
 
     if (result === 0) {
       this.isStartupCreated = true;
-      appendEventLog('[startup] createStartUpPageContainer OK — isStartupCreated=true');
       return;
     }
 
     appendEventLog(
-      `[startup] createStartUpPageContainer code=${result} (${this.startupResultLabel(result)}); trying rebuildPageContainer fallback`,
+      `createStartUpPageContainer code=${result}; trying rebuildPageContainer fallback`,
     );
-    const tRe = performance.now();
     const rebuilt = await this.bridge.rebuildPageContainer(
       new RebuildPageContainer(startupPayload),
     );
-    appendEventLog(
-      `[startup] rebuildPageContainer: returned=${String(rebuilt)} typeof=${typeof rebuilt} +${(performance.now() - tRe).toFixed(0)}ms`,
-    );
     if (rebuilt) {
       this.isStartupCreated = true;
-      appendEventLog('[startup] Startup UI ok via rebuildPageContainer fallback.');
+      appendEventLog('Startup UI ok via rebuildPageContainer fallback.');
     } else {
-      appendEventLog(
-        `[startup] create+rebuild failed — init will still call renderMainMenu(); taps need successful rebuild`,
-      );
+      appendEventLog(`Failed to create startup page: code=${result}`);
     }
   }
 
