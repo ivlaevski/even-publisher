@@ -220,44 +220,79 @@ export class EvenPublisherClient {
     };
   }
 
-  /** First paint only — must be invoked at most once per glasses UI session (see SDK). */
-  private buildMainMenuPagePayload(): CreateStartUpPageContainer {
-    return new CreateStartUpPageContainer(this.getMainMenuLayoutData());
-  }
-
   /** All updates after startup — use `rebuildPageContainer`. */
   private buildMainMenuRebuildPayload(): RebuildPageContainer {
     return new RebuildPageContainer(this.getMainMenuLayoutData());
   }
 
-  /**
-   * SDK: `createStartUpPageContainer` must be called only once when first starting the glasses UI;
-   * later calls have no effect. We therefore invoke it exactly once (no retries) and set `isStartupCreated`
-   * in `finally` so this method never schedules a second create.
-   */
   private async ensureStartupUi(): Promise<void> {
     if (this.isStartupCreated) return;
 
-    await new Promise((r) => setTimeout(r, 100));
+    const title = new TextContainerProperty({
+      containerID: 1,
+      containerName: 'title',
+      xPosition: 0,
+      yPosition: 40,
+      width: 576,
+      height: 40,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRdaius: 0,
+      paddingLength: 2,
+      content: 'Even Publisher 1.0.109',
+      isEventCapture: 0,
+    });
 
-    const payload = this.buildMainMenuPagePayload();
+    const hint = new TextContainerProperty({
+      containerID: 2,
+      containerName: 'hint',
+      xPosition: 0,
+      yPosition: 120,
+      width: 576,
+      height: 40,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRdaius: 0,
+      paddingLength: 2,
+      content: 'Wait loading...',
+      isEventCapture: 1,
+    });
 
-    let result = StartUpPageCreateResult.invalid;
-    try {
-      result = await this.bridge.createStartUpPageContainer(payload);
-      appendEventLog(
-        `[startup] createStartUpPageContainer result=${result} `,
-      );
-    } finally {
-      this.isStartupCreated = true;
+    const startupPayload = {
+      containerTotalNum: 2,
+      textObject: [title, hint],
+    };
+
+    const tryCreate = () =>
+      this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(startupPayload));
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    let result = await tryCreate();
+    if (result !== 0) {
+      for (let attempt = 0; attempt < 3 && result !== 0; attempt += 1) {
+        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+        result = await tryCreate();
+      }
     }
 
     if (result === 0) {
+      this.isStartupCreated = true;
       return;
     }
 
-    const rebuilt = await this.bridge.rebuildPageContainer(this.buildMainMenuRebuildPayload());
-    appendEventLog(`[startup] rebuildPageContainer fallback ok=${String(rebuilt)}`);
+    appendEventLog(
+      `createStartUpPageContainer code=${result}; trying rebuildPageContainer fallback`,
+    );
+    const rebuilt = await this.bridge.rebuildPageContainer(
+      new RebuildPageContainer(startupPayload),
+    );
+    if (rebuilt) {
+      this.isStartupCreated = true;
+      appendEventLog('Startup UI ok via rebuildPageContainer fallback.');
+    } else {
+      appendEventLog(`Failed to create startup page: code=${result}`);
+    }
   }
 
   private buildPages(full: string): string[] {
