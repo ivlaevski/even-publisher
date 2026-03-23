@@ -152,11 +152,7 @@ export class EvenPublisherClient {
     if (n === StartUpPageCreateResult.outOfMemory) return 'outOfMemory';
     return `raw=${code}`;
   }
-
-  /**
-   * Shared layout for the main menu: used for the one-time startup create and for all rebuilds.
-   * List events use `containerName === 'main-menu-list'` (see `onEvenHubEvent`).
-   */
+  
   private getMainMenuLayoutData(): {
     containerTotalNum: number;
     listObject: ListContainerProperty[];
@@ -181,9 +177,13 @@ export class EvenPublisherClient {
       height: 160,
       containerID: 2,
       containerName: 'main-menu-list',
+      borderWidth: 1,
+      borderColor: 5,
+      borderRdaius: 6,
+      paddingLength: 4,      
       itemContainer: new ListItemContainerProperty({
         itemCount: 3,
-        itemWidth: 0,
+        itemWidth: 535,
         isItemSelectBorderEn: 1,
         itemName: ['Start new research', 'Continue old research', 'Review Ready for Publishing'],
       }),
@@ -197,7 +197,7 @@ export class EvenPublisherClient {
       height: 32,
       containerID: 3,
       containerName: 'main-menu-subtitle',
-      content: 'by Ivan Vlaevski v.1.0',
+      content: 'by Ivan Vlaevski v.1.0.108',
       isEventCapture: 0,
     });
 
@@ -241,15 +241,12 @@ export class EvenPublisherClient {
     await new Promise((r) => setTimeout(r, 100));
 
     const payload = this.buildMainMenuPagePayload();
-    appendEventLog(
-      '[startup] createStartUpPageContainer — single call (SDK: only once; retries would be no-ops or wrong)',
-    );
 
     let result = StartUpPageCreateResult.invalid;
     try {
       result = await this.bridge.createStartUpPageContainer(payload);
       appendEventLog(
-        `[startup] createStartUpPageContainer result=${result} (${this.startupResultLabel(result)})`,
+        `[startup] createStartUpPageContainer result=${result} `,
       );
     } finally {
       this.isStartupCreated = true;
@@ -259,9 +256,6 @@ export class EvenPublisherClient {
       return;
     }
 
-    appendEventLog(
-      `[startup] startup create not success — rebuildPageContainer fallback (never call create again)`,
-    );
     const rebuilt = await this.bridge.rebuildPageContainer(this.buildMainMenuRebuildPayload());
     appendEventLog(`[startup] rebuildPageContainer fallback ok=${String(rebuilt)}`);
   }
