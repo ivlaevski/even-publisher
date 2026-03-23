@@ -170,12 +170,13 @@ export class EvenPublisherClient {
    * The old two-text “splash” often got `invalid` on device; the list-based main menu matches what works on rebuild
    * and wires taps to `main-menu` list events (splash had no handler).
    */
-  private buildMainMenuPagePayload(): {
-    containerTotalNum: number;
-    textObject: TextContainerProperty[];
-    listObject: ListContainerProperty[];
-  } {
-    const items = ['Start new research', 'Continue old research', 'Review Ready for Publishing'];
+  private buildMainMenuPagePayload(): CreateStartUpPageContainer 
+  {
+    //containerTotalNum: number;
+    //textObject: TextContainerProperty[];
+    //listObject: ListContainerProperty[];
+    //} {
+   /* const items = ['Start new research', 'Continue old research', 'Review Ready for Publishing'];
 
     const list = new ListContainerProperty({
       containerID: 100,
@@ -232,7 +233,67 @@ export class EvenPublisherClient {
         }),
       ],
       listObject: [list],
-    };
+    };*/
+    const textContainer1 = new TextContainerProperty({
+      xPosition: 10,
+      yPosition: 10,
+      width: 250,
+      height: 32,
+      containerID: 1,
+      containerName: "main-menu-title",
+      content: "EvenPublisher",
+      isEventCapture: 0
+    });
+    
+    const listContainer1 = new ListContainerProperty({
+      xPosition: 10,
+      yPosition: 80,
+      width: 550,
+      height: 160,
+      containerID: 2,
+      containerName: "main-menu-list",
+      itemContainer: new ListItemContainerProperty({
+          itemCount: 3,
+          itemWidth: 0,
+          isItemSelectBorderEn: 1,
+          itemName: [
+            "Start new research",
+            "Continue old research",
+            "Review Ready for Publishing"
+          ]
+        }),
+      isEventCapture: 1
+    });
+    
+    const textContainer2 = new TextContainerProperty({
+      xPosition: 10,
+      yPosition: 42,
+      width: 250,
+      height: 25,
+      containerID: 3,
+      containerName: "main-menu-subtitle",
+      content: "by Ivan Vlaevski v.1.0",
+      isEventCapture: 0
+    });
+    
+    const textContainer3 = new TextContainerProperty({
+      xPosition: 326,
+      yPosition: 256,
+      width: 250,
+      height: 25,
+      containerID: 4,
+      containerName: "main-menu-footer",
+      content: "Revolute to @ivanvlaevski",
+      isEventCapture: 0
+    });
+    
+    const container = new CreateStartUpPageContainer({
+      containerTotalNum: 4,
+      listObject: [listContainer1],
+      textObject: [textContainer1, textContainer2, textContainer3],
+      imageObject: [],
+    });
+    return container;
   }
 
   private async ensureStartupUi(): Promise<void> {
