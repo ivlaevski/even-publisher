@@ -165,6 +165,76 @@ export class EvenPublisherClient {
     return `raw=${code}`;
   }
 
+  /**
+   * Same layout for first paint (`createStartUpPageContainer`) and updates (`rebuildPageContainer`).
+   * The old two-text “splash” often got `invalid` on device; the list-based main menu matches what works on rebuild
+   * and wires taps to `main-menu` list events (splash had no handler).
+   */
+  private buildMainMenuPagePayload(): {
+    containerTotalNum: number;
+    textObject: TextContainerProperty[];
+    listObject: ListContainerProperty[];
+  } {
+    const items = ['Start new research', 'Continue old research', 'Review Ready for Publishing'];
+
+    const list = new ListContainerProperty({
+      containerID: 100,
+      containerName: 'main-menu',
+      xPosition: 0,
+      yPosition: 80,
+      width: 576,
+      height: 176,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRdaius: 6,
+      paddingLength: 4,
+      isEventCapture: 1,
+      itemContainer: new ListItemContainerProperty({
+        itemCount: items.length,
+        itemWidth: 560,
+        isItemSelectBorderEn: 1,
+        itemName: items,
+      }),
+    });
+
+    return {
+      containerTotalNum: 4,
+      textObject: [
+        new TextContainerProperty({
+          containerID: 90,
+          containerName: 'main-menu-title',
+          xPosition: 0,
+          yPosition: 10,
+          width: 576,
+          height: 32,
+          content: 'EvenPublisher',
+          isEventCapture: 0,
+        }),
+        new TextContainerProperty({
+          containerID: 91,
+          containerName: 'main-menu-subtitle',
+          xPosition: 0,
+          yPosition: 42,
+          width: 576,
+          height: 24,
+          content: 'by Ivan Vlaevski v.1.0',
+          isEventCapture: 0,
+        }),
+        new TextContainerProperty({
+          containerID: 92,
+          containerName: 'main-menu-footer',
+          xPosition: 260,
+          yPosition: 260,
+          width: 316,
+          height: 24,
+          content: 'Revolute to @ivanvlaevski',
+          isEventCapture: 0,
+        }),
+      ],
+      listObject: [list],
+    };
+  }
+
   private async ensureStartupUi(): Promise<void> {
     if (this.isStartupCreated) return;
 
@@ -173,52 +243,17 @@ export class EvenPublisherClient {
       `[startup] ensureStartupUi: pre-create device connectType=${String(d?.status?.connectType ?? 'undefined')} sn=${d?.sn ?? '—'}`,
     );
 
-    // SDK: exactly one container on the page must have isEventCapture=1; startup max 4 containers total.
-    // Full border/padding fields match host validation expectations (avoids StartUpPageCreateResult.invalid).
-    const title = new TextContainerProperty({
-      containerID: 1,
-      containerName: 'title',
-      xPosition: 0,
-      yPosition: 40,
-      width: 576,
-      height: 40,
-      borderWidth: 0,
-      borderColor: 5,
-      borderRdaius: 0,
-      paddingLength: 2,
-      content: 'Even Publisher',
-      isEventCapture: 0,
-    });
-
-    const hint = new TextContainerProperty({
-      containerID: 2,
-      containerName: 'hint',
-      xPosition: 0,
-      yPosition: 120,
-      width: 576,
-      height: 40,
-      borderWidth: 0,
-      borderColor: 5,
-      borderRdaius: 0,
-      paddingLength: 2,
-      content: 'Tap to open main menu',
-      isEventCapture: 1,
-    });
-
-    const startupPayload = {
-      containerTotalNum: 2,
-      textObject: [title, hint],
-    };
+    // SDK: exactly one container with isEventCapture=1 — the list. Same payload as renderMainMenu().
+    const startupPayload = this.buildMainMenuPagePayload();
 
     appendEventLog(
-      '[startup] createStartUpPageContainer payload: containerTotalNum=2 textIds=[1,2] captureOn=[hint]',
+      '[startup] createStartUpPageContainer: main-menu layout (containerTotalNum=4 list+3 text, capture on list)',
     );
 
     const tryCreate = () =>
       this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(startupPayload));
 
-    // Brief defer after Connected: native pipeline sometimes needs a tick.
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
 
     const tCreate0 = performance.now();
     let result = await tryCreate();
@@ -227,16 +262,12 @@ export class EvenPublisherClient {
     );
 
     if (result !== 0) {
-      for (let attempt = 0; attempt < 3 && result !== 0; attempt += 1) {
-        const delay = 250 * (attempt + 1);
-        appendEventLog(`[startup] create retry in ${delay}ms (attempt ${attempt + 1})`);
-        await new Promise((r) => setTimeout(r, delay));
-        const t1 = performance.now();
-        result = await tryCreate();
-        appendEventLog(
-          `[startup] createStartUpPageContainer attempt${attempt + 1}: code=${result} (${this.startupResultLabel(result)}) +${(performance.now() - t1).toFixed(0)}ms`,
-        );
-      }
+      await new Promise((r) => setTimeout(r, 400));
+      const t1 = performance.now();
+      result = await tryCreate();
+      appendEventLog(
+        `[startup] createStartUpPageContainer retry1: code=${result} (${this.startupResultLabel(result)}) +${(performance.now() - t1).toFixed(0)}ms`,
+      );
     }
 
     if (result === 0) {
@@ -246,7 +277,7 @@ export class EvenPublisherClient {
     }
 
     appendEventLog(
-      `[startup] createStartUpPageContainer final code=${result} (${this.startupResultLabel(result)}); trying rebuildPageContainer fallback`,
+      `[startup] createStartUpPageContainer code=${result} (${this.startupResultLabel(result)}); trying rebuildPageContainer fallback`,
     );
     const tRe = performance.now();
     const rebuilt = await this.bridge.rebuildPageContainer(
@@ -260,7 +291,7 @@ export class EvenPublisherClient {
       appendEventLog('[startup] Startup UI ok via rebuildPageContainer fallback.');
     } else {
       appendEventLog(
-        `[startup] create failed (${this.startupResultLabel(result)}) and rebuild returned falsy — glasses may still show host placeholder; main menu rebuild may still work`,
+        `[startup] create+rebuild failed — init will still call renderMainMenu(); taps need successful rebuild`,
       );
     }
   }
@@ -409,65 +440,8 @@ export class EvenPublisherClient {
 
   private async renderMainMenu(): Promise<void> {
     this.ui.view = 'main-menu';
-    const items = ['Start new research', 'Continue old research', 'Review Ready for Publishing'];
-
-    const list = new ListContainerProperty({
-      containerID: 100,
-      containerName: 'main-menu',
-      xPosition: 0,
-      yPosition: 80,
-      width: 576,
-      height: 176,
-      borderWidth: 1,
-      borderColor: 5,
-      borderRdaius: 6,
-      paddingLength: 4,
-      isEventCapture: 1,
-      itemContainer: new ListItemContainerProperty({
-        itemCount: items.length,
-        itemWidth: 560,
-        isItemSelectBorderEn: 1,
-        itemName: items,
-      }),
-    });
-
     await this.bridge.rebuildPageContainer(
-      new RebuildPageContainer({
-        containerTotalNum: 4,
-        textObject: [
-          new TextContainerProperty({
-            containerID: 90,
-            containerName: 'main-menu-title',
-            xPosition: 0,
-            yPosition: 10,
-            width: 576,
-            height: 32,
-            content: 'EvenPublisher',
-            isEventCapture: 0,
-          }),
-          new TextContainerProperty({
-            containerID: 91,
-            containerName: 'main-menu-subtitle',
-            xPosition: 0,
-            yPosition: 42,
-            width: 576,
-            height: 24,
-            content: 'by Ivan Vlaevski v.1.0',
-            isEventCapture: 0,
-          }),
-          new TextContainerProperty({
-            containerID: 92,
-            containerName: 'main-menu-footer',
-            xPosition: 260,
-            yPosition: 260,
-            width: 316,
-            height: 24,
-            content: 'Revolute to @ivanvlaevski',
-            isEventCapture: 0,
-          }),
-        ],
-        listObject: [list],
-      }),
+      new RebuildPageContainer(this.buildMainMenuPagePayload()),
     );
 
     setStatus('Main menu: tap to choose an option.');
