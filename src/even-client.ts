@@ -84,16 +84,18 @@ export class EvenPublisherClient {
 
   async init(): Promise<void> {
     await this.ensureStartupUi();
-
+    appendEventLog('[startup] ensureStartupUi ok');
     await this.loadResearches();
+    appendEventLog('[startup] loadResearches ok');
     this.ui.topics = loadTopicsFromLocalStorage();
-    
+    appendEventLog('[startup] loadTopicsFromLocalStorage ok');
     await this.renderMainMenu();
+    appendEventLog('[startup] renderMainMenu ok');
 
     this.bridge.onEvenHubEvent((event) => {
       void this.onEvenHubEvent(event);
     });
-
+    appendEventLog('[startup] onEvenHubEvent ok');
     // Defer createStartUpPageContainer until glasses report Connected (like epub-reader).
     // Calling too early often returns StartUpPageCreateResult.invalid (1) while the hub still shows placeholder UI.
     //await this.waitForGlassesConnected(12000);
@@ -239,7 +241,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRdaius: 0,
       paddingLength: 2,
-      content: 'Even Publisher 1.0.109',
+      content: 'Even Publisher 1.0.110',
       isEventCapture: 0,
     });
 
