@@ -144,8 +144,7 @@ function bootSettingsUi(): void {
   };
 }
 
-async function main() {
-  bootSettingsUi();
+async function main() { 
   setStatus('Waiting for Even bridge…');
 
   const connectBtn = document.getElementById('connectBtn') as HTMLButtonElement | null;
@@ -184,7 +183,10 @@ async function main() {
   };
 
   // Auto-connect on load
-  void connect();
+  await connect();
+
+  bootSettingsUi();
+  appendEventLog('[main] bootSettingsUi ok');
 
   // Keep button as manual retry
   connectBtn?.addEventListener('click', () => {
