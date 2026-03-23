@@ -172,25 +172,25 @@ export class EvenPublisherClient {
       isEventCapture: 0,
     });
 
-    const listContainer1 = new ListContainerProperty({
-      xPosition: 10,
-      yPosition: 80,
-      width: 550,
-      height: 160,
-      containerID: 2,
-      containerName: 'main-menu-list',
-      borderWidth: 1,
-      borderColor: 5,
-      borderRdaius: 6,
-      paddingLength: 4,      
-      itemContainer: new ListItemContainerProperty({
-        itemCount: 3,
-        itemWidth: 535,
-        isItemSelectBorderEn: 1,
-        itemName: ['Start new research', 'Continue old research', 'Review Ready for Publishing'],
-      }),
-      isEventCapture: 1,
-    });
+    // const listContainer1 = new ListContainerProperty({
+    //   xPosition: 10,
+    //   yPosition: 80,
+    //   width: 550,
+    //   height: 160,
+    //   containerID: 2,
+    //   containerName: 'main-menu-list',
+    //   borderWidth: 1,
+    //   borderColor: 5,
+    //   borderRdaius: 6,
+    //   paddingLength: 4,      
+    //   itemContainer: new ListItemContainerProperty({
+    //     itemCount: 3,
+    //     itemWidth: 535,
+    //     isItemSelectBorderEn: 1,
+    //     itemName: ['Start new research', 'Continue old research', 'Review Ready for Publishing'],
+    //   }),
+    //   isEventCapture: 1,
+    // });
 
     const textContainer2 = new TextContainerProperty({
       xPosition: 10,
@@ -215,8 +215,8 @@ export class EvenPublisherClient {
     });
 
     return {
-      containerTotalNum: 4,
-      listObject: [listContainer1],
+      containerTotalNum: 3,
+      listObject: [], //listContainer1
       textObject: [textContainer1, textContainer2, textContainer3],
       imageObject: [],
     };
