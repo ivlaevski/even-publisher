@@ -229,7 +229,40 @@ export class EvenPublisherClient {
     //  `[startup] ensureStartupUi: pre-create device connectType=${String(d?.status?.connectType ?? 'undefined')} sn=${d?.sn ?? '—'}`,
     //);
     
-    const startupPayload = this.buildMainMenuPagePayload();
+    const title = new TextContainerProperty({
+      containerID: 1,
+      containerName: 'title',
+      xPosition: 0,
+      yPosition: 40,
+      width: 576,
+      height: 40,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRdaius: 0,
+      paddingLength: 2,
+      content: 'Even Publisher v.1.0.107',
+      isEventCapture: 0,
+    });
+
+    const hint = new TextContainerProperty({
+      containerID: 2,
+      containerName: 'hint',
+      xPosition: 0,
+      yPosition: 120,
+      width: 576,
+      height: 40,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRdaius: 0,
+      paddingLength: 2,
+      content: 'Wait loading...',
+      isEventCapture: 1,
+    });
+
+    const startupPayload = {
+      containerTotalNum: 2,
+      textObject: [title, hint],
+    };
 
     const tryCreate = () =>
       this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(startupPayload));
