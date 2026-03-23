@@ -10,9 +10,10 @@
   "entrypoint": "index.html",
   "min_sdk_version": "0.1.0",
   "supported_languages": ["en"],
-  "permissions": [
-    "android.permission.INTERNET",
-    "android.permission.ACCESS_NETWORK_STATE"
-  ]
+  "permissions": {
+    "network": [
+      "*"
+    ]
+  }
 }
 
