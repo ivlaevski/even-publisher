@@ -155,18 +155,14 @@ export class EvenPublisherClient {
     return `raw=${code}`;
   }
   
-  private getMainMenuLayoutData(): {
-    containerTotalNum: number;
-    listObject: ListContainerProperty[];
-    textObject: TextContainerProperty[];
-    imageObject: [];
-  } {
+  private getMainMenuLayoutData(): RebuildPageContainer 
+  {
     const textContainer1 = new TextContainerProperty({
       xPosition: 10,
       yPosition: 10,
       width: 250,
       height: 32,
-      containerID: 1,
+      containerID: 199,
       containerName: 'main-menu-title',
       content: 'EvenPublisher',
       isEventCapture: 0,
@@ -197,29 +193,31 @@ export class EvenPublisherClient {
       yPosition: 42,
       width: 250,
       height: 32,
-      containerID: 3,
+      containerID: 399,
       containerName: 'main-menu-subtitle',
-      content: 'by Ivan Vlaevski v.1.0.108',
-      isEventCapture: 0,
+      content: 'by Ivan Vlaevski v.1.0.112',
+      isEventCapture: 1,
     });
 
-    const textContainer3 = new TextContainerProperty({
-      xPosition: 326,
-      yPosition: 256,
-      width: 250,
-      height: 32,
-      containerID: 4,
-      containerName: 'main-menu-footer',
-      content: 'Revolute to @ivanvlaevski',
-      isEventCapture: 0,
-    });
+    // const textContainer3 = new TextContainerProperty({
+    //   xPosition: 326,
+    //   yPosition: 256,
+    //   width: 250,
+    //   height: 32,
+    //   containerID: 4,
+    //   containerName: 'main-menu-footer',
+    //   content: 'Revolute to @ivanvlaevski',
+    //   isEventCapture: 0,
+    // });
 
-    return {
-      containerTotalNum: 3,
+    appendEventLog('[main menu] no list; no footer');
+
+    return new RebuildPageContainer ({
+      containerTotalNum: 2,
       listObject: [], //listContainer1
-      textObject: [textContainer1, textContainer2, textContainer3],
+      textObject: [textContainer1, textContainer2],
       imageObject: [],
-    };
+    });
   }
 
   /** All updates after startup — use `rebuildPageContainer`. */
@@ -241,7 +239,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRdaius: 0,
       paddingLength: 2,
-      content: 'Even Publisher 1.0.110',
+      content: 'Even Publisher 1.0.112',
       isEventCapture: 0,
     });
 
