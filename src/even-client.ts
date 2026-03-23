@@ -157,16 +157,16 @@ export class EvenPublisherClient {
   
   private getMainMenuLayoutData(): RebuildPageContainer 
   {
-    const textContainer1 = new TextContainerProperty({
-      xPosition: 10,
-      yPosition: 10,
-      width: 250,
-      height: 32,
-      containerID: 199,
-      containerName: 'main-menu-title',
-      content: 'EvenPublisher',
-      isEventCapture: 0,
-    });
+    // const textContainer1 = new TextContainerProperty({
+    //   xPosition: 10,
+    //   yPosition: 10,
+    //   width: 250,
+    //   height: 32,
+    //   containerID: 199,
+    //   containerName: 'main-menu-title',
+    //   content: 'EvenPublisher',
+    //   isEventCapture: 0,
+    // });
 
     // const listContainer1 = new ListContainerProperty({
     //   xPosition: 10,
@@ -188,16 +188,16 @@ export class EvenPublisherClient {
     //   isEventCapture: 1,
     // });
 
-    const textContainer2 = new TextContainerProperty({
-      xPosition: 10,
-      yPosition: 42,
-      width: 250,
-      height: 32,
-      containerID: 399,
-      containerName: 'main-menu-subtitle',
-      content: 'by Ivan Vlaevski v.1.0.112',
-      isEventCapture: 1,
-    });
+    // const textContainer2 = new TextContainerProperty({
+    //   xPosition: 10,
+    //   yPosition: 42,
+    //   width: 250,
+    //   height: 32,
+    //   containerID: 399,
+    //   containerName: 'main-menu-subtitle',
+    //   content: 'by Ivan Vlaevski v.1.0.112',
+    //   isEventCapture: 1,
+    // });
 
     // const textContainer3 = new TextContainerProperty({
     //   xPosition: 326,
@@ -212,11 +212,48 @@ export class EvenPublisherClient {
 
     appendEventLog('[main menu] no list; no footer');
 
-    return new RebuildPageContainer ({
-      containerTotalNum: 2,
-      listObject: [], //listContainer1
-      textObject: [textContainer1, textContainer2],
-      imageObject: [],
+    // 
+    return new RebuildPageContainer({
+      containerTotalNum: 4,
+      textObject: [
+        new TextContainerProperty({
+          containerID: 90,
+          containerName: 'menu-title',
+          xPosition: 0,
+          yPosition: 10,
+          width: 576,
+          height: 32,
+          borderWidth: 0,
+          borderColor: 5,
+          paddingLength: 2,
+          content: 'Even Menu (one QRule them all)',
+          isEventCapture: 0,
+        }),
+        new TextContainerProperty({
+          containerID: 91,
+          containerName: 'menu-subtitle',
+          xPosition: 0,
+          yPosition: 42,
+          width: 576,
+          height: 24,
+          borderWidth: 0,
+          borderColor: 5,
+          paddingLength: 2,
+          content: 'by Ivan Vlaevski v.1.0',
+          isEventCapture: 0,
+        }),
+        new TextContainerProperty({
+          containerID: 92,
+          containerName: 'menu-footer',
+          xPosition: 260,
+          yPosition: 260,
+          width: 316,
+          height: 24,
+          content: 'Revolute to @ivanvlaevski',
+          isEventCapture: 0,
+        }),
+      ],
+      //listObject: [list],
     });
   }
 
