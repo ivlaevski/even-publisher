@@ -269,7 +269,7 @@ export class EvenPublisherClient {
       xPosition: 10,
       yPosition: 42,
       width: 250,
-      height: 25,
+      height: 32,
       containerID: 3,
       containerName: "main-menu-subtitle",
       content: "by Ivan Vlaevski v.1.0",
@@ -280,7 +280,7 @@ export class EvenPublisherClient {
       xPosition: 326,
       yPosition: 256,
       width: 250,
-      height: 25,
+      height: 32,
       containerID: 4,
       containerName: "main-menu-footer",
       content: "Revolute to @ivanvlaevski",
@@ -1318,7 +1318,7 @@ export class EvenPublisherClient {
       event.listEvent?.eventType ??
       undefined;
 
-    if (event.listEvent && event.listEvent.containerName === 'main-menu') {
+    if (event.listEvent && event.listEvent.containerName === 'main-menu-list') {
       if (
         eventType === OsEventTypeList.CLICK_EVENT ||
         eventType === undefined
