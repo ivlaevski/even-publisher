@@ -157,10 +157,18 @@ async function main() {
       return;
     }
     try {
-      appendEventLog('Connecting to Even bridge…');
-      const bridge = await withTimeout(waitForEvenAppBridge(), 4000, 'waitForEvenAppBridge');
+      const t0 = performance.now();
+      appendEventLog(`[main] waitForEvenAppBridge starting… (${new Date().toISOString()})`);
+      const bridge = await withTimeout(waitForEvenAppBridge(), 30000, 'waitForEvenAppBridge');
+      appendEventLog(`[main] waitForEvenAppBridge resolved +${(performance.now() - t0).toFixed(0)}ms`);
+
+      appendEventLog('[main] EvenPublisherClient.init() starting…');
+      const tInit = performance.now();
       client = new EvenPublisherClient(bridge);
       await client.init();
+      appendEventLog(
+        `[main] EvenPublisherClient.init() done +${(performance.now() - tInit).toFixed(0)}ms (total since bridge +${(performance.now() - t0).toFixed(0)}ms)`,
+      );
       setStatus('Connected. Use glasses main menu to start.');
       appendEventLog('Bridge connected and EvenPublisherClient initialised.');
 
@@ -184,7 +192,7 @@ async function main() {
   };
 
   // Auto-connect on load
-  //void connect();
+  void connect();
 
   // Keep button as manual retry
   connectBtn?.addEventListener('click', () => {

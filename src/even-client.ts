@@ -1,9 +1,11 @@
 import {
   CreateStartUpPageContainer,
+  DeviceConnectType,
   ListContainerProperty,
   ListItemContainerProperty,
   OsEventTypeList,
   RebuildPageContainer,
+  StartUpPageCreateResult,
   TextContainerProperty,
   TextContainerUpgrade,
   type EvenHubEvent,
@@ -81,16 +83,65 @@ export class EvenPublisherClient {
   }
 
   async init(): Promise<void> {
-    await this.ensureStartupUi();
-    await this.loadResearches();
-    this.ui.topics = loadTopicsFromLocalStorage();
-    await this.renderMainMenu();
+    const initT0 = performance.now();
+    appendEventLog(`[startup] init() begin (${new Date().toISOString()})`);
 
     this.bridge.onEvenHubEvent((event) => {
       void this.onEvenHubEvent(event);
     });
 
+    // Defer createStartUpPageContainer until glasses report Connected (like epub-reader).
+    // Calling too early often returns StartUpPageCreateResult.invalid (1) while the hub still shows placeholder UI.
+    await this.waitForGlassesConnected(12000);
+
+    const tAfterWait = performance.now();
+    appendEventLog(`[startup] after waitForGlassesConnected: +${(tAfterWait - initT0).toFixed(0)}ms`);
+
+    await this.ensureStartupUi();
+
+    const tAfterStartup = performance.now();
+    appendEventLog(`[startup] after ensureStartupUi: +${(tAfterStartup - initT0).toFixed(0)}ms`);
+
+    appendEventLog('[startup] loadResearches…');
+    await this.loadResearches();
+    appendEventLog(`[startup] loadResearches done: +${(performance.now() - initT0).toFixed(0)}ms`);
+
+    this.ui.topics = loadTopicsFromLocalStorage();
+    appendEventLog('[startup] renderMainMenu…');
+    await this.renderMainMenu();
+    appendEventLog(`[startup] renderMainMenu done: +${(performance.now() - initT0).toFixed(0)}ms total`);
+
     setStatus('Even Publisher connected. Use glasses to navigate menu.');
+  }
+
+  /** Poll until getDeviceInfo reports Connected, or timeout (browser / simulator may never report). */
+  private async waitForGlassesConnected(maxMs: number): Promise<void> {
+    const t0 = performance.now();
+    let lastLogAt = 0;
+
+    while (performance.now() - t0 < maxMs) {
+      const d = await this.bridge.getDeviceInfo();
+      const ct = d?.status?.connectType;
+      const sn = d?.sn ?? '—';
+
+      if (performance.now() - t0 - lastLogAt >= 1500) {
+        appendEventLog(
+          `[startup] device poll: connectType=${String(ct)} sn=${sn} (+${(performance.now() - t0).toFixed(0)}ms)`,
+        );
+        lastLogAt = performance.now() - t0;
+      }
+
+      if (ct === DeviceConnectType.Connected) {
+        appendEventLog(`[startup] glasses Connected after ${(performance.now() - t0).toFixed(0)}ms`);
+        return;
+      }
+
+      await new Promise((r) => setTimeout(r, 350));
+    }
+
+    appendEventLog(
+      `[startup] still not Connected after ${maxMs}ms — continuing anyway (simulator / WebView may omit status)`,
+    );
   }
 
   private getConfig(): PublisherConfig {
@@ -105,8 +156,22 @@ export class EvenPublisherClient {
     };
   }
 
+  private startupResultLabel(code: number): string {
+    const n = StartUpPageCreateResult.normalize(code);
+    if (n === StartUpPageCreateResult.success) return 'success';
+    if (n === StartUpPageCreateResult.invalid) return 'invalid';
+    if (n === StartUpPageCreateResult.oversize) return 'oversize';
+    if (n === StartUpPageCreateResult.outOfMemory) return 'outOfMemory';
+    return `raw=${code}`;
+  }
+
   private async ensureStartupUi(): Promise<void> {
     if (this.isStartupCreated) return;
+
+    const d = await this.bridge.getDeviceInfo();
+    appendEventLog(
+      `[startup] ensureStartupUi: pre-create device connectType=${String(d?.status?.connectType ?? 'undefined')} sn=${d?.sn ?? '—'}`,
+    );
 
     // SDK: exactly one container on the page must have isEventCapture=1; startup max 4 containers total.
     // Full border/padding fields match host validation expectations (avoids StartUpPageCreateResult.invalid).
@@ -145,37 +210,58 @@ export class EvenPublisherClient {
       textObject: [title, hint],
     };
 
+    appendEventLog(
+      '[startup] createStartUpPageContainer payload: containerTotalNum=2 textIds=[1,2] captureOn=[hint]',
+    );
+
     const tryCreate = () =>
       this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(startupPayload));
 
-    // Brief defer: bridge is sometimes not ready on first tick after auto-connect.
-    await new Promise((r) => setTimeout(r, 50));
+    // Brief defer after Connected: native pipeline sometimes needs a tick.
+    await new Promise((r) => setTimeout(r, 80));
 
+    const tCreate0 = performance.now();
     let result = await tryCreate();
+    appendEventLog(
+      `[startup] createStartUpPageContainer attempt0: code=${result} (${this.startupResultLabel(result)}) +${(performance.now() - tCreate0).toFixed(0)}ms`,
+    );
+
     if (result !== 0) {
       for (let attempt = 0; attempt < 3 && result !== 0; attempt += 1) {
-        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+        const delay = 250 * (attempt + 1);
+        appendEventLog(`[startup] create retry in ${delay}ms (attempt ${attempt + 1})`);
+        await new Promise((r) => setTimeout(r, delay));
+        const t1 = performance.now();
         result = await tryCreate();
+        appendEventLog(
+          `[startup] createStartUpPageContainer attempt${attempt + 1}: code=${result} (${this.startupResultLabel(result)}) +${(performance.now() - t1).toFixed(0)}ms`,
+        );
       }
     }
 
     if (result === 0) {
       this.isStartupCreated = true;
+      appendEventLog('[startup] createStartUpPageContainer OK — isStartupCreated=true');
       return;
     }
 
-    // Host may already have a startup surface (e.g. reload); create returns invalid — try rebuild once.
     appendEventLog(
-      `createStartUpPageContainer code=${result} (invalid); trying rebuildPageContainer fallback`,
+      `[startup] createStartUpPageContainer final code=${result} (${this.startupResultLabel(result)}); trying rebuildPageContainer fallback`,
     );
+    const tRe = performance.now();
     const rebuilt = await this.bridge.rebuildPageContainer(
       new RebuildPageContainer(startupPayload),
     );
+    appendEventLog(
+      `[startup] rebuildPageContainer: returned=${String(rebuilt)} typeof=${typeof rebuilt} +${(performance.now() - tRe).toFixed(0)}ms`,
+    );
     if (rebuilt) {
       this.isStartupCreated = true;
-      appendEventLog('Startup UI ok via rebuildPageContainer fallback.');
+      appendEventLog('[startup] Startup UI ok via rebuildPageContainer fallback.');
     } else {
-      appendEventLog(`Failed to create startup page: code=${result}`);
+      appendEventLog(
+        `[startup] create failed (${this.startupResultLabel(result)}) and rebuild returned falsy — glasses may still show host placeholder; main menu rebuild may still work`,
+      );
     }
   }
 
