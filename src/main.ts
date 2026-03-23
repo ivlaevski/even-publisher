@@ -11,6 +11,9 @@ import {
   withTimeout,
 } from './utils';
 
+let client: EvenPublisherClient | null = null;
+let statusTimer: number | null = null;
+
 function bootSettingsUi(): void {
   const config = loadConfigFromLocalStorage();
 
@@ -146,10 +149,7 @@ async function main() {
   setStatus('Waiting for Even bridge…');
 
   const connectBtn = document.getElementById('connectBtn') as HTMLButtonElement | null;
-  const actionBtn = document.getElementById('actionBtn') as HTMLButtonElement | null;
-
-  let client: EvenPublisherClient | null = null;
-  let statusTimer: number | null = null;
+  
 
   const connect = async () => {
     if (client) {
@@ -157,18 +157,10 @@ async function main() {
       return;
     }
     try {
-      const t0 = performance.now();
-      appendEventLog(`[main] waitForEvenAppBridge starting… (${new Date().toISOString()})`);
-      const bridge = await withTimeout(waitForEvenAppBridge(), 30000, 'waitForEvenAppBridge');
-      appendEventLog(`[main] waitForEvenAppBridge resolved +${(performance.now() - t0).toFixed(0)}ms`);
-
-      appendEventLog('[main] EvenPublisherClient.init() starting…');
-      const tInit = performance.now();
+      appendEventLog('Connecting to Even bridge…');
+      const bridge = await waitForEvenAppBridge();
       client = new EvenPublisherClient(bridge);
       await client.init();
-      appendEventLog(
-        `[main] EvenPublisherClient.init() done +${(performance.now() - tInit).toFixed(0)}ms (total since bridge +${(performance.now() - t0).toFixed(0)}ms)`,
-      );
       setStatus('Connected. Use glasses main menu to start.');
       appendEventLog('Bridge connected and EvenPublisherClient initialised.');
 
@@ -197,10 +189,6 @@ async function main() {
   // Keep button as manual retry
   connectBtn?.addEventListener('click', () => {
     void connect();
-  });
-
-  actionBtn?.addEventListener('click', () => {
-    appendEventLog('Action button pressed (no-op). Use glasses gestures to drive the flow.');
   });
 
   const promptSubmitBtn = document.getElementById('prompt-submit') as HTMLButtonElement | null;
