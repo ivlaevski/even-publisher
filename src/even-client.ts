@@ -154,147 +154,116 @@ export class EvenPublisherClient {
   }
 
   /**
-   * Same layout for first paint (`createStartUpPageContainer`) and updates (`rebuildPageContainer`).
-   * The old two-text “splash” often got `invalid` on device; the list-based main menu matches what works on rebuild
-   * and wires taps to `main-menu` list events (splash had no handler).
+   * Shared layout for the main menu: used for the one-time startup create and for all rebuilds.
+   * List events use `containerName === 'main-menu-list'` (see `onEvenHubEvent`).
    */
-  private buildMainMenuPagePayload(): CreateStartUpPageContainer 
-  {
+  private getMainMenuLayoutData(): {
+    containerTotalNum: number;
+    listObject: ListContainerProperty[];
+    textObject: TextContainerProperty[];
+    imageObject: [];
+  } {
     const textContainer1 = new TextContainerProperty({
       xPosition: 10,
       yPosition: 10,
       width: 250,
       height: 32,
       containerID: 1,
-      containerName: "main-menu-title",
-      content: "EvenPublisher",
-      isEventCapture: 0
+      containerName: 'main-menu-title',
+      content: 'EvenPublisher',
+      isEventCapture: 0,
     });
-    
+
     const listContainer1 = new ListContainerProperty({
       xPosition: 10,
       yPosition: 80,
       width: 550,
       height: 160,
       containerID: 2,
-      containerName: "main-menu-list",
+      containerName: 'main-menu-list',
       itemContainer: new ListItemContainerProperty({
-          itemCount: 3,
-          itemWidth: 0,
-          isItemSelectBorderEn: 1,
-          itemName: [
-            "Start new research",
-            "Continue old research",
-            "Review Ready for Publishing"
-          ]
-        }),
-      isEventCapture: 1
+        itemCount: 3,
+        itemWidth: 0,
+        isItemSelectBorderEn: 1,
+        itemName: ['Start new research', 'Continue old research', 'Review Ready for Publishing'],
+      }),
+      isEventCapture: 1,
     });
-    
+
     const textContainer2 = new TextContainerProperty({
       xPosition: 10,
       yPosition: 42,
       width: 250,
       height: 32,
       containerID: 3,
-      containerName: "main-menu-subtitle",
-      content: "by Ivan Vlaevski v.1.0",
-      isEventCapture: 0
+      containerName: 'main-menu-subtitle',
+      content: 'by Ivan Vlaevski v.1.0',
+      isEventCapture: 0,
     });
-    
+
     const textContainer3 = new TextContainerProperty({
       xPosition: 326,
       yPosition: 256,
       width: 250,
       height: 32,
       containerID: 4,
-      containerName: "main-menu-footer",
-      content: "Revolute to @ivanvlaevski",
-      isEventCapture: 0
+      containerName: 'main-menu-footer',
+      content: 'Revolute to @ivanvlaevski',
+      isEventCapture: 0,
     });
-    
-    const container = new CreateStartUpPageContainer({
+
+    return {
       containerTotalNum: 4,
       listObject: [listContainer1],
       textObject: [textContainer1, textContainer2, textContainer3],
       imageObject: [],
-    });
-    return container;
+    };
   }
 
+  /** First paint only — must be invoked at most once per glasses UI session (see SDK). */
+  private buildMainMenuPagePayload(): CreateStartUpPageContainer {
+    return new CreateStartUpPageContainer(this.getMainMenuLayoutData());
+  }
+
+  /** All updates after startup — use `rebuildPageContainer`. */
+  private buildMainMenuRebuildPayload(): RebuildPageContainer {
+    return new RebuildPageContainer(this.getMainMenuLayoutData());
+  }
+
+  /**
+   * SDK: `createStartUpPageContainer` must be called only once when first starting the glasses UI;
+   * later calls have no effect. We therefore invoke it exactly once (no retries) and set `isStartupCreated`
+   * in `finally` so this method never schedules a second create.
+   */
   private async ensureStartupUi(): Promise<void> {
     if (this.isStartupCreated) return;
 
-    //const d = await this.bridge.getDeviceInfo();
-    //appendEventLog(
-    //  `[startup] ensureStartupUi: pre-create device connectType=${String(d?.status?.connectType ?? 'undefined')} sn=${d?.sn ?? '—'}`,
-    //);
-    
-    const title = new TextContainerProperty({
-      containerID: 1,
-      containerName: 'title',
-      xPosition: 0,
-      yPosition: 40,
-      width: 576,
-      height: 40,
-      borderWidth: 0,
-      borderColor: 5,
-      borderRdaius: 0,
-      paddingLength: 2,
-      content: 'Even Publisher v.1.0.107',
-      isEventCapture: 0,
-    });
+    await new Promise((r) => setTimeout(r, 100));
 
-    const hint = new TextContainerProperty({
-      containerID: 2,
-      containerName: 'hint',
-      xPosition: 0,
-      yPosition: 120,
-      width: 576,
-      height: 40,
-      borderWidth: 0,
-      borderColor: 5,
-      borderRdaius: 0,
-      paddingLength: 2,
-      content: 'Wait loading...',
-      isEventCapture: 1,
-    });
+    const payload = this.buildMainMenuPagePayload();
+    appendEventLog(
+      '[startup] createStartUpPageContainer — single call (SDK: only once; retries would be no-ops or wrong)',
+    );
 
-    const startupPayload = {
-      containerTotalNum: 2,
-      textObject: [title, hint],
-    };
-
-    const tryCreate = () =>
-      this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(startupPayload));
-
-    await new Promise((r) => setTimeout(r, 50));
-
-    let result = await tryCreate();
-    if (result !== 0) {
-      for (let attempt = 0; attempt < 3 && result !== 0; attempt += 1) {
-        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
-        result = await tryCreate();
-      }
+    let result = StartUpPageCreateResult.invalid;
+    try {
+      result = await this.bridge.createStartUpPageContainer(payload);
+      appendEventLog(
+        `[startup] createStartUpPageContainer result=${result} (${this.startupResultLabel(result)})`,
+      );
+    } finally {
+      this.isStartupCreated = true;
     }
 
     if (result === 0) {
-      this.isStartupCreated = true;
       return;
     }
 
     appendEventLog(
-      `createStartUpPageContainer code=${result}; trying rebuildPageContainer fallback`,
+      `[startup] startup create not success — rebuildPageContainer fallback (never call create again)`,
     );
-    const rebuilt = await this.bridge.rebuildPageContainer(
-      new RebuildPageContainer(startupPayload),
-    );
-    if (rebuilt) {
-      this.isStartupCreated = true;
-      appendEventLog('Startup UI ok via rebuildPageContainer fallback.');
-    } else {
-      appendEventLog(`Failed to create startup page: code=${result}`);
-    }
+    const rebuilt = await this.bridge.rebuildPageContainer(this.buildMainMenuRebuildPayload());
+    appendEventLog(`[startup] rebuildPageContainer fallback ok=${String(rebuilt)}`);
   }
 
   private buildPages(full: string): string[] {
@@ -441,9 +410,8 @@ export class EvenPublisherClient {
 
   private async renderMainMenu(): Promise<void> {
     this.ui.view = 'main-menu';
-    await this.bridge.rebuildPageContainer(
-      new RebuildPageContainer(this.buildMainMenuPagePayload()),
-    );
+    // After the one-time createStartUpPageContainer, only rebuild (SDK).
+    await this.bridge.rebuildPageContainer(this.buildMainMenuRebuildPayload());
 
     setStatus('Main menu: tap to choose an option.');
   }
