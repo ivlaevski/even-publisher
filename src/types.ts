@@ -29,8 +29,8 @@ export interface Research {
 }
 
 export interface PublisherConfig {
-  /** Perplexity Search API — used only for `fetchLatestAiNews`. */
-  perplexityApiKey: string;
+  /** Google Gemini API key — used only for `fetchLatestAiNews` (Generative AI + search grounding). */
+  googleGenerativeApiKey: string;
   openAiApiKey: string;
   openAiModel: string;
   wordpressBaseUrl: string;

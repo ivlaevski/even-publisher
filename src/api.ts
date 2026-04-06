@@ -1,4 +1,4 @@
-import Perplexity from '@perplexity-ai/perplexity_ai';
+import { GoogleGenerativeAI, SchemaType, type Schema } from '@google/generative-ai';
 
 import type { AiNewsItem, PublisherConfig, Research } from './types';
 import { appendEventLog } from './utils';
@@ -28,69 +28,101 @@ function normalizeDashes(input: string): string {
   return input.replace(/\u2014/g, ' - ');
 }
 
-/** Collapse whitespace and cap length for Perplexity snippet → description. */
+/** Collapse whitespace and cap length for Gemini summary text → description. */
 function snippetToDescription(snippet: string, maxWords: number): string {
   const words = snippet.replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean);
   if (words.length <= maxWords) return words.join(' ');
   return `${words.slice(0, maxWords).join(' ')}…`;
 }
 
+interface GeminiDevelopment {
+  title: string;
+  date: string;
+  summary: string;
+  source_url: string;
+  why_noteworthy: string;
+}
+
 /**
- * Fetches ranked web results via Perplexity Search API
- * (see https://docs.perplexity.ai/docs/search/quickstart).
+ * Fetches recent developments via Gemini with Google Search grounding and structured JSON output.
  * OpenAI is not used here.
  */
 export async function fetchLatestAiNews(
   config: PublisherConfig,
   topicInput: string,
 ): Promise<AiNewsItem[]> {
-  const key = config.perplexityApiKey?.trim();
+  const key = config.googleGenerativeApiKey?.trim();
   if (!key) {
-    throw new Error('Perplexity API key not configured. Add it under AI & Publishing Settings on the phone.');
+    throw new Error(
+      'Google Gemini API key not configured. Add it under AI & Publishing Settings on the phone.',
+    );
   }
 
   const defaultTopic = 'Artificial Intelligence';
   const topic = (topicInput && topicInput.trim()) || defaultTopic;
-  const query = `Recent news about ${topic}`;
 
-  let results: Array<{
-    title: string;
-    url: string;
-    snippet: string;
-    date?: string | null;
-    last_updated?: string | null;
-  }> = [];
+  const responseSchema: Schema = {
+    description: 'List of recent developments',
+    type: SchemaType.ARRAY,
+    items: {
+      type: SchemaType.OBJECT,
+      properties: {
+        title: { type: SchemaType.STRING },
+        date: { type: SchemaType.STRING },
+        summary: { type: SchemaType.STRING },
+        source_url: { type: SchemaType.STRING },
+        why_noteworthy: { type: SchemaType.STRING },
+      },
+      required: ['title', 'date', 'summary', 'source_url', 'why_noteworthy'],
+    },
+  };
+
+  const genAI = new GoogleGenerativeAI(key);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-flash',
+    tools: [{ googleSearchRetrieval: {} }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema,
+    },
+  });
+
+  const prompt = `Find the 5 most recent and discussion-worthy developments about ${topic}.
+Focus on events from the last 30 days.`;
+
+  let data: GeminiDevelopment[] = [];
 
   try {
-    const client = new Perplexity({ apiKey: key });
-    const search = await client.search.create({
-      query,
-      max_results: 5,
-      max_tokens: 25000,
-      max_tokens_per_page: 2048,
-      search_language_filter: ['en'],
-      search_recency_filter: 'week',
-    });
-    results = search.results ?? [];
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+    data = JSON.parse(text) as GeminiDevelopment[];
+
+    const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+    const searchHtml = groundingMetadata?.searchEntryPoint?.renderedContent;
+    if (searchHtml) {
+      appendEventLog(
+        '[Gemini] Search grounding: display Google Search entry point where required for public apps.',
+      );
+    }
   } catch (error) {
-    appendEventLog(`Perplexity Search error ${error}`);
+    appendEventLog(`Gemini fetchLatestAiNews error ${error}`);
     throw error;
   }
 
-  if (results.length === 0) {
-    appendEventLog('Perplexity Search returned no results.');
+  if (data.length === 0) {
+    appendEventLog('Gemini returned no developments.');
   }
 
-  return results.map((item) => {
+  return data.map((item) => {
     const rawTitle = String(item.title ?? '').trim() || 'Untitled';
-    const snippet = String(item.snippet ?? '').trim();
-    const eventDateTimeRaw = item.date ?? item.last_updated;
+    const body = [item.summary, item.why_noteworthy].filter(Boolean).join('\n\n');
     return {
       title: normalizeDashes(rawTitle),
-      description: normalizeDashes(snippetToDescription(snippet, 50)),
+      description: normalizeDashes(snippetToDescription(body, 80)),
       personas: [] as string[],
-      eventDateTime: eventDateTimeRaw == null ? undefined : String(eventDateTimeRaw),
-      sourceUrl: item.url ? String(item.url) : undefined,
+      eventDateTime: item.date ? String(item.date) : undefined,
+      sourceUrl: item.source_url ? String(item.source_url) : undefined,
       raw: item,
     };
   });

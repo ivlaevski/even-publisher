@@ -83,7 +83,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label = 'operati
 }
 
 export function loadConfigFromLocalStorage(): {
-  perplexityApiKey: string;
+  googleGenerativeApiKey: string;
   openAiApiKey: string;
   openAiModel: string;
   wordpressBaseUrl: string;
@@ -92,7 +92,10 @@ export function loadConfigFromLocalStorage(): {
   elevenLabsApiKey: string;
 } {
   return {
-    perplexityApiKey: localStorage.getItem('even-publisher:perplexity-key') ?? '',
+    googleGenerativeApiKey:
+      localStorage.getItem('even-publisher:google-generative-key') ??
+      localStorage.getItem('even-publisher:perplexity-key') ??
+      '',
     openAiApiKey: localStorage.getItem('even-publisher:openai-key') ?? '',
     openAiModel: localStorage.getItem('even-publisher:openai-model') ?? 'gpt-4.1-mini',
     wordpressBaseUrl: localStorage.getItem('even-publisher:wp-url') ?? '',
@@ -103,7 +106,7 @@ export function loadConfigFromLocalStorage(): {
 }
 
 export function saveConfigToLocalStorage(config: {
-  perplexityApiKey: string;
+  googleGenerativeApiKey: string;
   openAiApiKey: string;
   openAiModel: string;
   wordpressBaseUrl: string;
@@ -111,7 +114,7 @@ export function saveConfigToLocalStorage(config: {
   wordpressPassword: string;
   elevenLabsApiKey: string;
 }): void {
-  localStorage.setItem('even-publisher:perplexity-key', config.perplexityApiKey.trim());
+  localStorage.setItem('even-publisher:google-generative-key', config.googleGenerativeApiKey.trim());
   localStorage.setItem('even-publisher:openai-key', config.openAiApiKey.trim());
   localStorage.setItem('even-publisher:openai-model', config.openAiModel.trim());
   localStorage.setItem('even-publisher:wp-url', config.wordpressBaseUrl.trim());

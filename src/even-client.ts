@@ -133,7 +133,7 @@ export class EvenPublisherClient {
   private getConfig(): PublisherConfig {
     const cfg = loadConfigFromLocalStorage();
     return {
-      perplexityApiKey: cfg.perplexityApiKey,
+      googleGenerativeApiKey: cfg.googleGenerativeApiKey,
       openAiApiKey: cfg.openAiApiKey,
       openAiModel: cfg.openAiModel,
       wordpressBaseUrl: cfg.wordpressBaseUrl,
@@ -764,9 +764,9 @@ export class EvenPublisherClient {
 
   private async startNewResearchFlow(): Promise<void> {
     const config = this.getConfig();
-    if (!config.perplexityApiKey?.trim()) {
+    if (!config.googleGenerativeApiKey?.trim()) {
       await this.showTextFullScreen(
-        'Perplexity API key missing.\n\nSet it under AI & Publishing Settings on the phone, then try again.',
+        'Google Gemini API key missing.\n\nSet it under AI & Publishing Settings on the phone, then try again.',
       );
       return;
     }

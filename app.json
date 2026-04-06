@@ -13,14 +13,14 @@
   "permissions": [
     {
       "name": "network",
-      "desc": "OpenAI, Perplexity Search, ElevenLabs STT/TTS, user WordPress site, and settings help links (see whitelist).",
+      "desc": "OpenAI, Google Generative Language (Gemini), ElevenLabs STT/TTS, user WordPress site, and settings help links (see whitelist).",
       "whitelist": [
         "https://api.elevenlabs.io",
         "https://api.openai.com",
-        "https://api.perplexity.ai",
+        "https://generativelanguage.googleapis.com",
         "https://elevenlabs.com",
         "https://platform.openai.com",
-        "https://www.perplexity.ai",
+        "https://aistudio.google.com",
         "*"
       ]
     },

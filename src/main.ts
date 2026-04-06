@@ -16,7 +16,7 @@ let client: EvenPublisherClient | null = null;
 let statusTimer: number | null = null;
 
 const AI_SETTINGS_INPUT_IDS = [
-  'perplexity-key',
+  'google-generative-key',
   'openai-key',
   'openai-model',
   'elevenlabs-key',
@@ -35,7 +35,7 @@ function allAiSettingsFieldsFilled(): boolean {
 function bootSettingsUi(): void {
   const config = loadConfigFromLocalStorage();
 
-  const perplexityKeyInput = document.getElementById('perplexity-key') as HTMLInputElement | null;
+  const googleGenerativeKeyInput = document.getElementById('google-generative-key') as HTMLInputElement | null;
   const openAiKeyInput = document.getElementById('openai-key') as HTMLInputElement | null;
   const openAiModelInput = document.getElementById('openai-model') as HTMLInputElement | null;
   const elevenLabsKeyInput = document.getElementById('elevenlabs-key') as HTMLInputElement | null;
@@ -53,7 +53,7 @@ function bootSettingsUi(): void {
   const topicsDeleteBtn = document.getElementById('topics-delete') as HTMLButtonElement | null;
   const topicsSaveBtn = document.getElementById('topics-save') as HTMLButtonElement | null;
 
-  if (perplexityKeyInput) perplexityKeyInput.value = config.perplexityApiKey;
+  if (googleGenerativeKeyInput) googleGenerativeKeyInput.value = config.googleGenerativeApiKey;
   if (openAiKeyInput) openAiKeyInput.value = config.openAiApiKey;
   if (openAiModelInput) openAiModelInput.value = config.openAiModel;
   if (elevenLabsKeyInput) elevenLabsKeyInput.value = config.elevenLabsApiKey;
@@ -121,7 +121,7 @@ function bootSettingsUi(): void {
 
   saveBtn?.addEventListener('click', () => {
     const next = {
-      perplexityApiKey: perplexityKeyInput?.value ?? '',
+      googleGenerativeApiKey: googleGenerativeKeyInput?.value ?? '',
       openAiApiKey: openAiKeyInput?.value ?? '',
       openAiModel: openAiModelInput?.value ?? 'gpt-4.1-mini',
       elevenLabsApiKey: elevenLabsKeyInput?.value ?? '',
