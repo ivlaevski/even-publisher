@@ -16,6 +16,17 @@
 
       h1 {
         margin-bottom: 0.25rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.35rem 0.6rem;
+      }
+
+      .app-version {
+        font-size: 0.55em;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: #6b7280;
       }
 
       .muted {
@@ -190,7 +201,7 @@
   <body>
     <div id="app">
       <header>
-        <h1>Even Publisher</h1>
+        <h1>Even Publisher <span class="app-version">%BUILD_VERSION%</span></h1>
         <p class="muted">
           Connect your G2 glasses, configure OpenAI and WordPress, then drive the whole publishing flow from the
           glasses.

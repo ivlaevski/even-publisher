@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --strictPort",
-    "build": "vite build",
+    "build": "vite build && node scripts/bump-build.mjs",
     "preview": "vite preview --host 0.0.0.0 --strictPort",
     "qr": "evenhub qr --port 5173 --path /",
     "init:evenhub": "evenhub init --output app.json",

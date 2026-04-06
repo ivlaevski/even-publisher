@@ -372,9 +372,7 @@ export class EvenPublisherClient {
     text: string;
     isEventCapture?: number;
   }): TextContainerProperty {
-    let contentText = this.ensureNonEmptyDisplayText(args.text);
-    console.log('contentText', contentText);
-    contentText = "Simple Test Text!!!";
+    const contentText = this.ensureNonEmptyDisplayText(args.text);
     return new TextContainerProperty({
       containerID: args.containerID,
       containerName: args.containerName,
