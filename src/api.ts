@@ -79,7 +79,7 @@ export async function fetchLatestAiNews(
 
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-flash-lite-latest',
     tools: [{ googleSearchRetrieval: {} }],
     generationConfig: {
       responseMimeType: 'application/json',
