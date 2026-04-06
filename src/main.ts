@@ -3,6 +3,7 @@ import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk';
 import { EvenPublisherClient } from './even-client';
 import {
   appendEventLog,
+  installGlobalErrorLogging,
   loadConfigFromLocalStorage,
   saveConfigToLocalStorage,
   setStatus,
@@ -144,7 +145,8 @@ function bootSettingsUi(): void {
   };
 }
 
-async function main() { 
+async function main() {
+  installGlobalErrorLogging();
   setStatus('Waiting for Even bridge…');
 
   const connectBtn = document.getElementById('connectBtn') as HTMLButtonElement | null;

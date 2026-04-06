@@ -26,7 +26,7 @@ import { cancelSttRecording, feedSttAudio, startSttRecording, stopSttAndTranscri
 
 const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
 
-const MAX_CONTENT_LENGTH = 2000-25;
+const MAX_CONTENT_LENGTH = 900 - 25;
 
 type ResearchState = {
   researches: Research[];
@@ -83,24 +83,15 @@ export class EvenPublisherClient {
   }
 
   async init(): Promise<void> {
+    await this.waitForGlassesConnected(12000);
     await this.ensureStartupUi();
-    appendEventLog('[startup] ensureStartupUi ok');
     await this.loadResearches();
-    appendEventLog('[startup] loadResearches ok');
     this.ui.topics = loadTopicsFromLocalStorage();
-    appendEventLog('[startup] loadTopicsFromLocalStorage ok');
     await this.renderMainMenu();
-    appendEventLog('[startup] renderMainMenu ok');
 
     this.bridge.onEvenHubEvent((event) => {
       void this.onEvenHubEvent(event);
     });
-    appendEventLog('[startup] onEvenHubEvent ok');
-    // Defer createStartUpPageContainer until glasses report Connected (like epub-reader).
-    // Calling too early often returns StartUpPageCreateResult.invalid (1) while the hub still shows placeholder UI.
-    //await this.waitForGlassesConnected(12000);
-
-
     setStatus('Even Publisher connected. Use glasses to navigate menu.');
   }
 
@@ -154,65 +145,28 @@ export class EvenPublisherClient {
     if (n === StartUpPageCreateResult.outOfMemory) return 'outOfMemory';
     return `raw=${code}`;
   }
-  
-  private getMainMenuLayoutData(): RebuildPageContainer 
-  {
-    // const textContainer1 = new TextContainerProperty({
-    //   xPosition: 10,
-    //   yPosition: 10,
-    //   width: 250,
-    //   height: 32,
-    //   containerID: 199,
-    //   containerName: 'main-menu-title',
-    //   content: 'EvenPublisher',
-    //   isEventCapture: 0,
-    // });
 
-    // const listContainer1 = new ListContainerProperty({
-    //   xPosition: 10,
-    //   yPosition: 80,
-    //   width: 550,
-    //   height: 160,
-    //   containerID: 2,
-    //   containerName: 'main-menu-list',
-    //   borderWidth: 1,
-    //   borderColor: 5,
-    //   borderRdaius: 6,
-    //   paddingLength: 4,      
-    //   itemContainer: new ListItemContainerProperty({
-    //     itemCount: 3,
-    //     itemWidth: 535,
-    //     isItemSelectBorderEn: 1,
-    //     itemName: ['Start new research', 'Continue old research', 'Review Ready for Publishing'],
-    //   }),
-    //   isEventCapture: 1,
-    // });
+  private getMainMenuLayoutData(): RebuildPageContainer {
+    const list = new ListContainerProperty({
+      containerID: 100,
+      containerName: 'app-menu',
+      xPosition: 0,
+      yPosition: 72,
+      width: 576,
+      height: 176,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRadius: 6,
+      paddingLength: 4,
+      isEventCapture: 1,
+      itemContainer: new ListItemContainerProperty({
+        itemCount: 3,
+        itemWidth: 560,
+        isItemSelectBorderEn: 1,
+        itemName: ['Start new research', 'Continue old research', 'Review Ready for Publishing'],
+      }),
+    });
 
-    // const textContainer2 = new TextContainerProperty({
-    //   xPosition: 10,
-    //   yPosition: 42,
-    //   width: 250,
-    //   height: 32,
-    //   containerID: 399,
-    //   containerName: 'main-menu-subtitle',
-    //   content: 'by Ivan Vlaevski v.1.0.112',
-    //   isEventCapture: 1,
-    // });
-
-    // const textContainer3 = new TextContainerProperty({
-    //   xPosition: 326,
-    //   yPosition: 256,
-    //   width: 250,
-    //   height: 32,
-    //   containerID: 4,
-    //   containerName: 'main-menu-footer',
-    //   content: 'Revolute to @ivanvlaevski',
-    //   isEventCapture: 0,
-    // });
-
-    appendEventLog('[main menu] no list; no footer');
-
-    // 
     return new RebuildPageContainer({
       containerTotalNum: 4,
       textObject: [
@@ -226,7 +180,7 @@ export class EvenPublisherClient {
           borderWidth: 0,
           borderColor: 5,
           paddingLength: 2,
-          content: 'Even Menu (one QRule them all)',
+          content: 'Even Publisher for WordPress',
           isEventCapture: 0,
         }),
         new TextContainerProperty({
@@ -235,11 +189,11 @@ export class EvenPublisherClient {
           xPosition: 0,
           yPosition: 42,
           width: 576,
-          height: 24,
+          height: 32,
           borderWidth: 0,
           borderColor: 5,
           paddingLength: 2,
-          content: 'by Ivan Vlaevski v.1.0',
+          content: 'by Ivan Vlaevski v.1.0.113',
           isEventCapture: 0,
         }),
         new TextContainerProperty({
@@ -248,12 +202,12 @@ export class EvenPublisherClient {
           xPosition: 260,
           yPosition: 260,
           width: 316,
-          height: 24,
+          height: 32,
           content: 'Revolute to @ivanvlaevski',
           isEventCapture: 0,
         }),
       ],
-      //listObject: [list],
+      listObject: [list],
     });
   }
 
@@ -274,9 +228,9 @@ export class EvenPublisherClient {
       height: 40,
       borderWidth: 0,
       borderColor: 5,
-      borderRdaius: 0,
+      borderRadius: 0,
       paddingLength: 2,
-      content: 'Even Publisher 1.0.112',
+      content: 'Even Publisher 1.0.113',
       isEventCapture: 0,
     });
 
@@ -289,7 +243,7 @@ export class EvenPublisherClient {
       height: 40,
       borderWidth: 0,
       borderColor: 5,
-      borderRdaius: 0,
+      borderRadius: 0,
       paddingLength: 2,
       content: 'Wait loading...',
       isEventCapture: 1,
@@ -346,7 +300,7 @@ export class EvenPublisherClient {
       // +1 to account for the newline we add when joining (except possibly last)
       const extra = line.length + (currentLines.length > 0 ? 1 : 0);
       if (currentLength + extra > MAX_CONTENT_LENGTH && currentLines.length > 0) {
-        pages.push(currentLines.join('\n')+'... [ page break; next page number: ' + (pages.length+1) + ']\n\n');
+        pages.push(currentLines.join('\n') + '... [ page break; next page number: ' + (pages.length + 1) + ']\n\n');
         currentLines = [line];
         currentLength = line.length;
       } else {
@@ -356,7 +310,7 @@ export class EvenPublisherClient {
     }
 
     if (currentLines.length > 0) {
-      pages.push(currentLines.join('\n')+'... [ end ]\n\n');
+      pages.push(currentLines.join('\n') + '... [ end ]\n\n');
     }
 
     return pages;
@@ -402,6 +356,41 @@ export class EvenPublisherClient {
     return result;
   }
 
+  /** Host PB expects non-empty `Content`; empty string often fails to render. */
+  private ensureNonEmptyDisplayText(text: string): string {
+    return text.length > 0 ? text : ' ';
+  }
+
+  /**
+   * Full-screen text (576×288) aligned with `TextContainerProperty` / PB `TextContainerProperty`.
+   * Uses `const content = …; return new TextContainerProperty({ …, content })` so JSON gets `Content` reliably.
+   */
+  private createFullScreenTextContainerProperty(args: {
+    containerID: number;
+    containerName: string;
+    /** Already sanitized and length-clipped if needed */
+    text: string;
+    isEventCapture?: number;
+  }): TextContainerProperty {
+    let contentText = this.ensureNonEmptyDisplayText(args.text);
+    console.log('contentText', contentText);
+    contentText = "Simple Test Text!!!";
+    return new TextContainerProperty({
+      containerID: args.containerID,
+      containerName: args.containerName,
+      xPosition: 0,
+      yPosition: 0,
+      width: 576,
+      height: 288,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 4,
+      content: contentText,
+      isEventCapture: args.isEventCapture ?? 1,
+    });
+  }
+
   private async updateResearchDetailPage(research: Research): Promise<void> {
     if (!this.ui.researchPages.length) {
       const header = `${research.title}\n\n`;
@@ -413,7 +402,7 @@ export class EvenPublisherClient {
     }
 
     const rawPage = this.ui.researchPages[this.ui.researchPageIndex] ?? '';
-    const page = this.sanitizeForDisplay(rawPage);
+    const page = this.ensureNonEmptyDisplayText(this.sanitizeForDisplay(rawPage));
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
@@ -454,24 +443,21 @@ export class EvenPublisherClient {
   }
 
   private async showTextFullScreen(content: string, captureEvents = true): Promise<void> {
-    const trimmed = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
+    const textBody = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
     await this.bridge.rebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         textObject: [
-          new TextContainerProperty({
+          this.createFullScreenTextContainerProperty({
             containerID: 10,
             containerName: 'body',
-            xPosition: 0,
-            yPosition: 0,
-            width: 576,
-            height: 288,
-            content: trimmed,
+            text: textBody,
             isEventCapture: captureEvents ? 1 : 0,
           }),
         ],
       }),
     );
+    setStatus(`showTextFullScreen: ${textBody}`);
   }
 
   private async renderMainMenu(): Promise<void> {
@@ -512,7 +498,7 @@ export class EvenPublisherClient {
       height: 288,
       borderWidth: 1,
       borderColor: 5,
-      borderRdaius: 6,
+      borderRadius: 6,
       paddingLength: 4,
       isEventCapture: 1,
       itemContainer: new ListItemContainerProperty({
@@ -591,9 +577,9 @@ export class EvenPublisherClient {
 
     const personas = Array.isArray(item.personas)
       ? (item.personas as any[])
-          .map((p) => (typeof p === 'string' ? p : p?.name ?? ''))
-          .filter(Boolean)
-          .join(', ')
+        .map((p) => (typeof p === 'string' ? p : p?.name ?? ''))
+        .filter(Boolean)
+        .join(', ')
       : '';
 
     const lines: string[] = [];
@@ -630,7 +616,7 @@ export class EvenPublisherClient {
       height: 288,
       borderWidth: 1,
       borderColor: 5,
-      borderRdaius: 6,
+      borderRadius: 6,
       paddingLength: 4,
       isEventCapture: 1,
       itemContainer: new ListItemContainerProperty({
@@ -659,30 +645,23 @@ export class EvenPublisherClient {
     const full = header + research.content + footer;
     this.ui.researchPages = this.buildPages(full);
     this.ui.researchPageIndex = 0;
-    const content = this.sanitizeForDisplay(this.ui.researchPages[0] ?? '');
+    const textBody = this.sanitizeForDisplay(this.ui.researchPages[0] ?? '');
 
     await this.bridge.rebuildPageContainer(
-      new RebuildPageContainer({
-        containerTotalNum: 1,
-        textObject: [
-          new TextContainerProperty({
-            containerID: 400,
-            containerName: 'research-detail',
-            xPosition: 0,
-            yPosition: 0,
-            width: 576,
-            height: 288,
-            borderWidth: 0,
-            borderColor: 5,
-            paddingLength: 4,
-            content,
-            isEventCapture: 1,
+      new RebuildPageContainer({        
+            containerTotalNum: 1,
+            textObject: [
+              this.createFullScreenTextContainerProperty({
+                containerID: 400,
+                containerName: 'research-detail',
+                text: textBody,
+                isEventCapture: 1,
+              })
+            ],
           }),
-        ],
-      }),
     );
 
-    setStatus('Research: scroll to read, double-tap for prompt / ready / exit menu.');
+    setStatus('Research: scroll to read, double-tap for menu.');
   }
 
   private async renderReadyList(): Promise<void> {
@@ -700,7 +679,7 @@ export class EvenPublisherClient {
       height: 288,
       borderWidth: 1,
       borderColor: 5,
-      borderRdaius: 6,
+      borderRadius: 6,
       paddingLength: 4,
       isEventCapture: 1,
       itemContainer: new ListItemContainerProperty({
@@ -731,23 +710,16 @@ export class EvenPublisherClient {
     const full = header + research.content + footer;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = 0;
-    const content = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '');
+    const textBody = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '');
 
     await this.bridge.rebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         textObject: [
-          new TextContainerProperty({
+          this.createFullScreenTextContainerProperty({
             containerID: 600,
             containerName: 'ready-detail',
-            xPosition: 0,
-            yPosition: 0,
-            width: 576,
-            height: 288,
-            borderWidth: 0,
-            borderColor: 5,
-            paddingLength: 4,
-            content,
+            text: textBody,
             isEventCapture: 1,
           }),
         ],
@@ -763,7 +735,7 @@ export class EvenPublisherClient {
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = clamp(this.ui.readyPageIndex, 0, this.ui.readyPages.length - 1);
     const rawPage = this.ui.readyPages[this.ui.readyPageIndex] ?? '';
-    const page = this.sanitizeForDisplay(rawPage);
+    const page = this.ensureNonEmptyDisplayText(this.sanitizeForDisplay(rawPage));
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
@@ -857,6 +829,9 @@ export class EvenPublisherClient {
     await this.saveResearches();
 
     this.ui.researchSelectedIndex = this.getDraftResearches().findIndex((r) => r.id === research.id);
+    if (this.ui.researchSelectedIndex < 0) {
+      this.ui.researchSelectedIndex = Math.max(0, this.getDraftResearches().length - 1);
+    }
     await this.renderResearchDetail(research);
   }
 
@@ -977,7 +952,7 @@ export class EvenPublisherClient {
       height: 288,
       borderWidth: 1,
       borderColor: 5,
-      borderRdaius: 6,
+      borderRadius: 6,
       paddingLength: 4,
       isEventCapture: 1,
       itemContainer: new ListItemContainerProperty({
@@ -1019,7 +994,7 @@ export class EvenPublisherClient {
       height: 288,
       borderWidth: 1,
       borderColor: 5,
-      borderRdaius: 6,
+      borderRadius: 6,
       paddingLength: 4,
       isEventCapture: 1,
       itemContainer: new ListItemContainerProperty({
@@ -1029,6 +1004,8 @@ export class EvenPublisherClient {
         itemName: items.map((label, idx) => `${idx + 1}. ${label}`),
       }),
     });
+
+    const questionText = this.ensureNonEmptyDisplayText(this.sanitizeForDisplay(question));
 
     await this.bridge.rebuildPageContainer(
       new RebuildPageContainer({
@@ -1043,8 +1020,9 @@ export class EvenPublisherClient {
             height: 144,
             borderWidth: 0,
             borderColor: 5,
+            borderRadius: 0,
             paddingLength: 4,
-            content: this.sanitizeForDisplay(question),
+            content: questionText,
             isEventCapture: 0,
           }),
         ],
@@ -1076,7 +1054,7 @@ export class EvenPublisherClient {
       height: 288,
       borderWidth: 1,
       borderColor: 5,
-      borderRdaius: 6,
+      borderRadius: 6,
       paddingLength: 4,
       isEventCapture: 1,
       itemContainer: new ListItemContainerProperty({
@@ -1102,7 +1080,7 @@ export class EvenPublisherClient {
     if (!config.elevenLabsApiKey?.trim()) {
       await this.showTextFullScreen(
         `${research.title}\n\n` +
-          'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.\n\nTap to continue.',
+        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.\n\nTap to continue.',
       );
       this.ui.view = 'error';
       return;
@@ -1110,7 +1088,7 @@ export class EvenPublisherClient {
 
     this.ui.view = 'research-read-aloud';
     this.readAloudAborted = false;
-    const fullText = `${research.title}\n${research.content}`;    
+    const fullText = `${research.title}\n${research.content}`;
     this.readAloudLines = fullText.split('\n').map((line) => line.trim());
     this.readAloudLineIndex = 0;
 
@@ -1134,7 +1112,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    const display = this.sanitizeForDisplay(
+    const textBody = this.sanitizeForDisplay(
       `${line}\n\nTap = pause · Scroll down = next line · Scroll up = replay · Double-tap = back`,
     );
 
@@ -1142,17 +1120,10 @@ export class EvenPublisherClient {
       new RebuildPageContainer({
         containerTotalNum: 1,
         textObject: [
-          new TextContainerProperty({
-            containerID: 400,
+          this.createFullScreenTextContainerProperty({
+            containerID: 1400 + this.readAloudLineIndex,
             containerName: 'research-read-aloud',
-            xPosition: 0,
-            yPosition: 0,
-            width: 576,
-            height: 288,
-            borderWidth: 0,
-            borderColor: 5,
-            paddingLength: 4,
-            content: display,
+            text: textBody,
             isEventCapture: 1,
           }),
         ],
@@ -1196,12 +1167,12 @@ export class EvenPublisherClient {
             this.currentReadAloudAudio = null;
             if (
               this.readAloudAborted ||
-              this.ui.view !== 'research-read-aloud' 
+              this.ui.view !== 'research-read-aloud'
             ) {
               resolve();
               return;
             }
-            this.readAloudLineIndex += 1;                        
+            this.readAloudLineIndex += 1;
             void this.renderReadAloudCurrentLine(research);
             resolve();
           };
@@ -1209,6 +1180,7 @@ export class EvenPublisherClient {
             URL.revokeObjectURL(url);
             this.currentReadAloudAudio = null;
             reject(audio.error ?? new Error('Playback failed'));
+            setStatus('Read aloud: audio ERROR');
           };
           audio.play().catch(reject);
         })
@@ -1221,7 +1193,7 @@ export class EvenPublisherClient {
     if (!config.elevenLabsApiKey) {
       await this.showTextFullScreen(
         `${research.title}\n\n` +
-          'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',
+        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',
       );
       return;
     }
@@ -1233,7 +1205,7 @@ export class EvenPublisherClient {
           `${research.title}\n\nListening… tap to stop, double-tap to exit.`,
         );
         await startSttRecording(this.bridge);
-        this.isVoiceRecording = true;        
+        this.isVoiceRecording = true;
         setStatus('Voice prompt: listening… tap to stop, double-tap to exit.');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1247,6 +1219,8 @@ export class EvenPublisherClient {
     try {
       const transcript = await stopSttAndTranscribe(config.elevenLabsApiKey);
       this.isVoiceRecording = false;
+
+      setStatus(`Voice prompt: ${transcript}`);
 
       if (!transcript.trim()) {
         await this.showTextFullScreen(
@@ -1263,9 +1237,9 @@ export class EvenPublisherClient {
 
       await this.showTextFullScreen(
         `${research.title}\n\n` +
-          'Transcribed request:\n\n' +
-          `${transcript}\n\n` +
-          'You can now use this text to refine the draft on the phone.',
+        'Transcribed request:\n\n' +
+        `${transcript}\n\n` +
+        'You can now use this text to refine the draft on the phone.',
       );
     } catch (error) {
       this.isVoiceRecording = false;
@@ -1274,6 +1248,21 @@ export class EvenPublisherClient {
         `${research.title}\n\nFailed to transcribe speech.\n\n${message}\n\nTap to continue.`,
       );
     }
+  }
+
+  /**
+   * Glass firmware may use different casing / underscores for text container names.
+   */
+  private normalizeContainerName(name: string): string {
+    return name.replace(/_/g, '-').toLowerCase().trim();
+  }
+
+  private textContainerNameMatches(
+    got: string | undefined,
+    expected: string,
+  ): boolean {
+    if (got == null || got === '') return false;
+    return this.normalizeContainerName(got) === this.normalizeContainerName(expected);
   }
 
   private async onEvenHubEvent(event: EvenHubEvent): Promise<void> {
@@ -1292,7 +1281,8 @@ export class EvenPublisherClient {
       event.listEvent?.eventType ??
       undefined;
 
-    if (event.listEvent && event.listEvent.containerName === 'main-menu-list') {
+    // Must be gated by view: unguarded `app-menu` was stealing taps from other list screens.
+    if (this.ui.view === 'main-menu' && event.listEvent) {
       if (
         eventType === OsEventTypeList.CLICK_EVENT ||
         eventType === undefined
@@ -1303,7 +1293,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    if (this.ui.view === 'topic-select' && event.listEvent?.containerName === 'topic-select') {
+    if (this.ui.view === 'topic-select' && event.listEvent) {
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         const topics = this.ui.topics;
         const idx = event.listEvent.currentSelectItemIndex ?? 0;
@@ -1350,7 +1340,7 @@ export class EvenPublisherClient {
       }
     }
 
-    if (this.ui.view === 'research-list' && event.listEvent?.containerName === 'research-list') {
+    if (this.ui.view === 'research-list' && event.listEvent) {
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         const drafts = this.getDraftResearches();
         const idx = event.listEvent.currentSelectItemIndex ?? 0;
@@ -1368,7 +1358,11 @@ export class EvenPublisherClient {
     }
 
     // Handle research detail view (also fallback by container name, in case view flag desyncs).
-    if (this.ui.view === 'research-detail' || event.textEvent?.containerName === 'research-detail') {
+    if (
+      this.ui.view === 'research-detail' ||
+      (event.textEvent &&
+        this.textContainerNameMatches(event.textEvent.containerName, 'research-detail'))
+    ) {
       const drafts = this.getDraftResearches();
       const research = drafts[this.ui.researchSelectedIndex];
       if (!research) {
@@ -1398,7 +1392,7 @@ export class EvenPublisherClient {
       }
     }
 
-    if (this.ui.view === 'research-menu' && event.listEvent?.containerName === 'research-menu') {
+    if (this.ui.view === 'research-menu' && event.listEvent) {
       const drafts = this.getDraftResearches();
       const research = drafts[this.ui.researchSelectedIndex];
       if (!research) {
@@ -1437,10 +1431,10 @@ export class EvenPublisherClient {
         if (this.currentReadAloudAudio) {
           if (this.currentReadAloudAudio.paused) {
             this.currentReadAloudAudio.play();
-            setStatus('Read aloud resumed. Scroll to pause or double-tap to exit.');
+            setStatus('Read aloud resumed. Tap to pause or double-tap to exit.');
           } else {
             this.currentReadAloudAudio.pause();
-            setStatus('Read aloud paused. Scroll to continue or double-tap to exit.');
+            setStatus('Read aloud paused. Tap to continue or double-tap to exit.');
           }
         }
         return;
@@ -1457,7 +1451,7 @@ export class EvenPublisherClient {
           this.currentReadAloudAudio.currentTime = 0;
           this.currentReadAloudAudio = null;
         }
-        this.readAloudLineIndex -= 1; 
+        this.readAloudLineIndex -= 1;
         if (this.readAloudLineIndex < 0) {
           this.readAloudLineIndex = 0;
         }
@@ -1471,7 +1465,7 @@ export class EvenPublisherClient {
           this.currentReadAloudAudio.currentTime = 0;
           this.currentReadAloudAudio = null;
         }
-        this.readAloudLineIndex += 1;        
+        this.readAloudLineIndex += 1;
         await this.renderReadAloudCurrentLine(research);
         return;
       }
@@ -1491,7 +1485,7 @@ export class EvenPublisherClient {
         }
         await this.renderResearchDetail(research);
         return;
-      }      
+      }
 
       if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
         if (this.isVoiceRecording) {
@@ -1503,7 +1497,7 @@ export class EvenPublisherClient {
       }
     }
 
-    if (this.ui.view === 'ready-list' && event.listEvent?.containerName === 'ready-list') {
+    if (this.ui.view === 'ready-list' && event.listEvent) {
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         const ready = this.getReadyResearches();
         const idx = event.listEvent.currentSelectItemIndex ?? 0;
@@ -1560,7 +1554,7 @@ export class EvenPublisherClient {
       }
     }
 
-    if (this.ui.view === 'ready-menu' && event.listEvent?.containerName === 'ready-menu') {
+    if (this.ui.view === 'ready-menu' && event.listEvent) {
       const ready = this.getReadyResearches();
       const research = ready[this.ui.readySelectedIndex];
       if (!research) {
@@ -1584,10 +1578,8 @@ export class EvenPublisherClient {
     }
 
     if (
-      (this.ui.view === 'confirm-cancel-research' &&
-        event.listEvent?.containerName === 'confirm-cancel-research') ||
-      (this.ui.view === 'confirm-cancel-ready' &&
-        event.listEvent?.containerName === 'confirm-cancel-ready')
+      (this.ui.view === 'confirm-cancel-research' && event.listEvent) ||
+      (this.ui.view === 'confirm-cancel-ready' && event.listEvent)
     ) {
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         const idx = event.listEvent.currentSelectItemIndex ?? 0;

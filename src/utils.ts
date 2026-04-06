@@ -20,6 +20,55 @@ export function appendEventLog(message: string): void {
   el.textContent = `[${ts}] ${message}\n` + el.textContent;
 }
 
+let globalErrorLoggingInstalled = false;
+
+function formatConsoleArgs(parts: unknown[]): string {
+  return parts
+    .map((p) => {
+      if (typeof p === 'string') return p;
+      if (p instanceof Error) return p.stack ?? p.message;
+      try {
+        return JSON.stringify(p);
+      } catch {
+        return String(p);
+      }
+    })
+    .join(' ');
+}
+
+/** Routes uncaught errors, unhandled rejections, and console.error into the event log UI. */
+export function installGlobalErrorLogging(): void {
+  if (globalErrorLoggingInstalled) return;
+  globalErrorLoggingInstalled = true;
+
+  window.addEventListener(
+    'error',
+    (ev: ErrorEvent) => {
+      const loc =
+        ev.filename && ev.lineno
+          ? ` (${ev.filename}:${ev.lineno}:${ev.colno ?? 0})`
+          : '';
+      const detail =
+        ev.error instanceof Error ? ev.error.stack ?? ev.error.message : ev.message || 'Unknown error';
+      appendEventLog(`[window.error]${loc} ${detail}`);
+    },
+    true,
+  );
+
+  window.addEventListener('unhandledrejection', (ev: PromiseRejectionEvent) => {
+    const r = ev.reason;
+    const detail = r instanceof Error ? r.stack ?? r.message : String(r);
+    appendEventLog(`[unhandledrejection] ${detail}`);
+  });
+
+  const origError = console.error.bind(console);
+  // eslint-disable-next-line no-console
+  console.error = (...args: unknown[]) => {
+    origError(...args);
+    appendEventLog(`[console.error] ${formatConsoleArgs(args)}`);
+  };
+}
+
 export function withTimeout<T>(promise: Promise<T>, ms: number, label = 'operation'): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => {
