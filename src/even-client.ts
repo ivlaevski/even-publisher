@@ -3,11 +3,14 @@ import {
   DeviceConnectType,
   ListContainerProperty,
   ListItemContainerProperty,
+  List_ItemEvent,
   OsEventTypeList,
   RebuildPageContainer,
   StartUpPageCreateResult,
+  Sys_ItemEvent,
   TextContainerProperty,
   TextContainerUpgrade,
+  Text_ItemEvent,
   evenHubEventFromJson,
   type EvenHubEvent,
   type EvenAppBridge,
@@ -91,7 +94,7 @@ export class EvenPublisherClient {
     await this.renderMainMenu();
 
     this.bridge.onEvenHubEvent((raw) => {
-      const event = evenHubEventFromJson(raw);
+      const event = this.normalizeIncomingHubEvent(raw);
       void this.onEvenHubEvent(event);
     });
     setStatus('Even Publisher connected. Use glasses to navigate menu.');
@@ -1276,6 +1279,61 @@ export class EvenPublisherClient {
     return this.normalizeContainerName(got) === this.normalizeContainerName(expected);
   }
 
+  /**
+   * `evenHubEventFromJson` can drop `listEvent` when the host uses alternate keys
+   * (`list_event`, nested `jsonData`). Merge loose payloads so list taps (main menu, etc.) work.
+   */
+  private normalizeIncomingHubEvent(raw: unknown): EvenHubEvent {
+    const parsed = evenHubEventFromJson(raw);
+    if (raw === null || typeof raw !== 'object') return parsed;
+
+    const r = raw as Record<string, unknown>;
+    const jd = (r.jsonData ?? r.json_data) as Record<string, unknown> | undefined;
+
+    let listEvent = parsed.listEvent;
+    if (!listEvent) {
+      const rawList = r.listEvent ?? r.list_event ?? jd?.listEvent ?? jd?.list_event;
+      if (rawList != null && typeof rawList === 'object') {
+        try {
+          listEvent = List_ItemEvent.fromJson(rawList);
+        } catch {
+          listEvent = rawList as EvenHubEvent['listEvent'];
+        }
+      }
+    }
+
+    let textEvent = parsed.textEvent;
+    if (!textEvent) {
+      const rawText = r.textEvent ?? r.text_event ?? jd?.textEvent ?? jd?.text_event;
+      if (rawText != null && typeof rawText === 'object') {
+        try {
+          textEvent = Text_ItemEvent.fromJson(rawText);
+        } catch {
+          textEvent = rawText as EvenHubEvent['textEvent'];
+        }
+      }
+    }
+
+    let sysEvent = parsed.sysEvent;
+    if (!sysEvent) {
+      const rawSys = r.sysEvent ?? r.sys_event ?? jd?.sysEvent ?? jd?.sys_event;
+      if (rawSys != null && typeof rawSys === 'object') {
+        try {
+          sysEvent = Sys_ItemEvent.fromJson(rawSys);
+        } catch {
+          sysEvent = rawSys as EvenHubEvent['sysEvent'];
+        }
+      }
+    }
+
+    return {
+      ...parsed,
+      listEvent,
+      textEvent,
+      sysEvent,
+    };
+  }
+
   private async onEvenHubEvent(event: EvenHubEvent): Promise<void> {
     const pcm = event.audioEvent?.audioPcm as Uint8Array | number[] | undefined;
     if (pcm instanceof Uint8Array) {
@@ -1299,13 +1357,18 @@ export class EvenPublisherClient {
 
     // Must be gated by view: unguarded `app-menu` was stealing taps from other list screens.
     if (this.ui.view === 'main-menu' && event.listEvent) {
+      const listGesture =
+        OsEventTypeList.fromJson(event.listEvent.eventType) ??
+        OsEventTypeList.fromJson(eventType) ??
+        eventType;
       if (
-        eventType === OsEventTypeList.CLICK_EVENT ||
-        eventType === undefined
+        listGesture === OsEventTypeList.SCROLL_TOP_EVENT ||
+        listGesture === OsEventTypeList.SCROLL_BOTTOM_EVENT
       ) {
-        const idx = event.listEvent.currentSelectItemIndex ?? 0;
-        await this.handleMainMenuSelect(idx);
+        return;
       }
+      const idx = event.listEvent.currentSelectItemIndex ?? 0;
+      await this.handleMainMenuSelect(idx);
       return;
     }
 
