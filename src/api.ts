@@ -44,6 +44,7 @@ type PerplexitySearchHit = {
 };
 
 type PerplexitySearchResponse = {
+  id?: string;
   results?: PerplexitySearchHit[];
 };
 
@@ -74,23 +75,10 @@ export async function fetchLatestAiNews(
   //  '- Do not use anything older than 7 days\n' +
   //  '- If a result is older, exclude it unless essential for context\n';
 
-   appendEventLog(`query ${query}`);
-   appendEventLog(`key ${key}`);
-   appendEventLog(`PERPLEXITY_SEARCH_URL ${PERPLEXITY_SEARCH_URL}`);
-   appendEventLog(`headers ${JSON.stringify({
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${key}`,
-  })}`);
-  appendEventLog(`body ${JSON.stringify({
-    'query': query,
-    'max_results': 5,
-    'max_tokens_per_page': 2048,
-    'search_language_filter': ['en'],
-  })}`);
-
-  let res: Response | null = null;
-  try{
-    res = await fetch(PERPLEXITY_SEARCH_URL, {
+  //let res: Response | null = null;
+  let results: PerplexitySearchHit[] = [];
+  try {
+    const res = await fetch(PERPLEXITY_SEARCH_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -103,22 +91,21 @@ export async function fetchLatestAiNews(
         'search_language_filter': ['en'],
       }),
     });
+    if (!res || !res.ok) {
+      const text = await res?.text() ?? 'No response';
+      appendEventLog(`Perplexity Search error ${res?.status}: ${text.slice(0, 500)}`);
+      throw new Error(`Perplexity Search error ${res?.status}: ${text}`);
+    }
+    const data = (await res.json()) as PerplexitySearchResponse;
+    results = data.results ?? [];
   } catch (error) {
     appendEventLog(`Perplexity Search error ${error}`);
     throw error;
   }
   finally {
-    appendEventLog(`result ${JSON.stringify(res)}`);
-  }
-   
-  if (!res || !res.ok) {
-    const text = await res?.text() ?? 'No response';
-    appendEventLog(`Perplexity Search error ${res?.status}: ${text.slice(0, 500)}`);
-    throw new Error(`Perplexity Search error ${res?.status}: ${text}`);
+    appendEventLog(`result ${JSON.stringify(results)}`);
   }
 
-  const data = (await res.json()) as PerplexitySearchResponse;
-  const results = data.results ?? [];
   if (results.length === 0) {
     appendEventLog('Perplexity Search returned no results.');
   }
