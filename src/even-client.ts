@@ -1277,10 +1277,15 @@ export class EvenPublisherClient {
   }
 
   private async onEvenHubEvent(event: EvenHubEvent): Promise<void> {
-    if (event.audioEvent?.audioPcm != null) {
-      feedSttAudio(event.audioEvent.audioPcm);
-      return;
+    const pcm = event.audioEvent?.audioPcm as Uint8Array | number[] | undefined;
+    if (pcm instanceof Uint8Array) {
+      if (pcm.byteLength > 0) feedSttAudio(pcm);
+    } else if (Array.isArray(pcm) && pcm.length > 0) {
+      feedSttAudio(pcm);
     }
+
+    // Do not return after audio: the host may attach audio alongside list events, or send
+    // empty PCM; swallowing the whole event here broke main-menu (and other) list taps.
 
     if (!event.textEvent && !event.listEvent && !event.sysEvent) {
       return;
