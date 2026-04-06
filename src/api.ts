@@ -63,28 +63,28 @@ export async function fetchLatestAiNews(
 
   const defaultTopic = 'Artificial Intelligence';
   const topic = (topicInput && topicInput.trim()) || defaultTopic;
-  const query = `Recent news about ${topic}\n`+
-  'Search priority:\n' +
-  '- official website / newsroom / blog / press release pages\n' +
-  '- official social accounts\n' +
-  '- reposts and reactions on social media\n' +
-  '- reputable news sites that cite the original source\n' +
-  'Freshness requirements:\n' +
-  '- Prefer items from the last 72 hours\n' +
-  '- Do not use anything older than 7 days\n' +
-  '- If a result is older, exclude it unless essential for context\n';
+  const query = `Recent news about ${topic}`; //\n`+
+  // 'Search priority:\n' +
+  // '- official website / newsroom / blog / press release pages\n' +
+  // '- official social accounts\n' +
+  // '- reposts and reactions on social media\n' +
+  // '- reputable news sites that cite the original source\n' +
+  // 'Freshness requirements:\n' +
+  // '- Prefer items from the last 72 hours\n' +
+  // '- Do not use anything older than 7 days\n' +
+  // '- If a result is older, exclude it unless essential for context\n';
 
   const res = await fetch(PERPLEXITY_SEARCH_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
+      'Authorization': `Bearer ${key}`,
     },
     body: JSON.stringify({
-      query,
-      max_results: 5,
-      max_tokens_per_page: 2048,
-      search_language_filter: ['en'],
+      'query': query,
+      'max_results': 5,
+      'max_tokens_per_page': 2048,
+      'search_language_filter': ['en'],
     }),
   });
 
