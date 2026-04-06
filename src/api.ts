@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, SchemaType, type Schema } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, type Schema, type Tool } from '@google/generative-ai';
 
 import type { AiNewsItem, PublisherConfig, Research } from './types';
 import { appendEventLog } from './utils';
@@ -80,7 +80,8 @@ export async function fetchLatestAiNews(
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({
     model: 'gemini-3-flash-preview',
-    tools: [{ googleSearchRetrieval : {} }], 
+    // Gemini 2.0+ / 3.x: `google_search` in JSON (SDK types only list legacy `googleSearchRetrieval`).
+    tools: [{ google_search: {} } as Tool],
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema,
