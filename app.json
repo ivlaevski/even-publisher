@@ -13,8 +13,16 @@
   "permissions": [
     {
       "name": "network",
-      "desc": "Uses OpenAI, ElevenLabs and WordPress APIs.",
-      "whitelist": ["*"]
+      "desc": "OpenAI, Perplexity Search, ElevenLabs STT/TTS, user WordPress site, and settings help links (see whitelist).",
+      "whitelist": [
+        "https://api.elevenlabs.io",
+        "https://api.openai.com",
+        "https://api.perplexity.ai",
+        "https://elevenlabs.com",
+        "https://platform.openai.com",
+        "https://www.perplexity.ai",
+        "*"
+      ]
     },
     {
       "name": "g2-microphone",

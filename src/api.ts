@@ -66,7 +66,7 @@ export async function fetchLatestAiNews(
     const search = await client.search.create({
       query,
       max_results: 5,
-      max_tokens: 2500,
+      max_tokens: 25000,
       max_tokens_per_page: 2048,
       search_language_filter: ['en'],
       search_recency_filter: 'week',
