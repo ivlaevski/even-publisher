@@ -8,6 +8,7 @@ import {
   StartUpPageCreateResult,
   TextContainerProperty,
   TextContainerUpgrade,
+  evenHubEventFromJson,
   type EvenHubEvent,
   type EvenAppBridge,
 } from '@evenrealities/even_hub_sdk';
@@ -89,7 +90,8 @@ export class EvenPublisherClient {
     this.ui.topics = loadTopicsFromLocalStorage();
     await this.renderMainMenu();
 
-    this.bridge.onEvenHubEvent((event) => {
+    this.bridge.onEvenHubEvent((raw) => {
+      const event = evenHubEventFromJson(raw);
       void this.onEvenHubEvent(event);
     });
     setStatus('Even Publisher connected. Use glasses to navigate menu.');
@@ -128,6 +130,7 @@ export class EvenPublisherClient {
   private getConfig(): PublisherConfig {
     const cfg = loadConfigFromLocalStorage();
     return {
+      perplexityApiKey: cfg.perplexityApiKey,
       openAiApiKey: cfg.openAiApiKey,
       openAiModel: cfg.openAiModel,
       wordpressBaseUrl: cfg.wordpressBaseUrl,
@@ -758,9 +761,9 @@ export class EvenPublisherClient {
 
   private async startNewResearchFlow(): Promise<void> {
     const config = this.getConfig();
-    if (!config.openAiApiKey) {
+    if (!config.perplexityApiKey?.trim()) {
       await this.showTextFullScreen(
-        'OpenAI API key missing.\n\nSet the key on the phone screen, then try again.',
+        'Perplexity API key missing.\n\nSet it under AI & Publishing Settings on the phone, then try again.',
       );
       return;
     }
@@ -1159,6 +1162,10 @@ export class EvenPublisherClient {
           const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
           const url = URL.createObjectURL(blob);
           const audio = new Audio(url);
+          audio.preload = 'auto';
+          audio.volume = 1;
+          audio.setAttribute('playsinline', 'true');
+          audio.setAttribute('webkit-playsinline', 'true');
           this.currentReadAloudAudio = audio;
           audio.onended = () => {
             URL.revokeObjectURL(url);
@@ -1180,7 +1187,13 @@ export class EvenPublisherClient {
             reject(audio.error ?? new Error('Playback failed'));
             setStatus('Read aloud: audio ERROR');
           };
-          audio.play().catch(reject);
+          void audio.play().catch((err) => {
+            URL.revokeObjectURL(url);
+            this.currentReadAloudAudio = null;
+            const msg = err instanceof Error ? err.message : String(err);
+            setStatus(`Read aloud: playback blocked (${msg}). Tap the glasses again to retry.`);
+            reject(err instanceof Error ? err : new Error(msg));
+          });
         })
         .catch(reject);
     });
@@ -1264,7 +1277,7 @@ export class EvenPublisherClient {
   }
 
   private async onEvenHubEvent(event: EvenHubEvent): Promise<void> {
-    if (event.audioEvent?.audioPcm) {
+    if (event.audioEvent?.audioPcm != null) {
       feedSttAudio(event.audioEvent.audioPcm);
       return;
     }

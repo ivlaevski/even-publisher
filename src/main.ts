@@ -18,6 +18,7 @@ let statusTimer: number | null = null;
 function bootSettingsUi(): void {
   const config = loadConfigFromLocalStorage();
 
+  const perplexityKeyInput = document.getElementById('perplexity-key') as HTMLInputElement | null;
   const openAiKeyInput = document.getElementById('openai-key') as HTMLInputElement | null;
   const openAiModelInput = document.getElementById('openai-model') as HTMLInputElement | null;
   const elevenLabsKeyInput = document.getElementById('elevenlabs-key') as HTMLInputElement | null;
@@ -35,6 +36,7 @@ function bootSettingsUi(): void {
   const topicsDeleteBtn = document.getElementById('topics-delete') as HTMLButtonElement | null;
   const topicsSaveBtn = document.getElementById('topics-save') as HTMLButtonElement | null;
 
+  if (perplexityKeyInput) perplexityKeyInput.value = config.perplexityApiKey;
   if (openAiKeyInput) openAiKeyInput.value = config.openAiApiKey;
   if (openAiModelInput) openAiModelInput.value = config.openAiModel;
   if (elevenLabsKeyInput) elevenLabsKeyInput.value = config.elevenLabsApiKey;
@@ -65,6 +67,7 @@ function bootSettingsUi(): void {
 
   saveBtn?.addEventListener('click', () => {
     const next = {
+      perplexityApiKey: perplexityKeyInput?.value ?? '',
       openAiApiKey: openAiKeyInput?.value ?? '',
       openAiModel: openAiModelInput?.value ?? 'gpt-4.1-mini',
       elevenLabsApiKey: elevenLabsKeyInput?.value ?? '',

@@ -26,64 +26,89 @@ function normalizeDashes(input: string): string {
   return input.replace(/\u2014/g, ' - ');
 }
 
+/** Collapse whitespace and cap length for Perplexity snippet → description. */
+function snippetToDescription(snippet: string, maxWords: number): string {
+  const words = snippet.replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(' ');
+  return `${words.slice(0, maxWords).join(' ')}…`;
+}
+
+const PERPLEXITY_SEARCH_URL = 'https://api.perplexity.ai/search';
+
+type PerplexitySearchHit = {
+  title?: string;
+  url?: string;
+  snippet?: string;
+  date?: string;
+  last_updated?: string;
+};
+
+type PerplexitySearchResponse = {
+  results?: PerplexitySearchHit[];
+};
+
+/**
+ * Fetches ranked web results via Perplexity Search API
+ * (see https://docs.perplexity.ai/docs/search/quickstart).
+ * OpenAI is not used here.
+ */
 export async function fetchLatestAiNews(
   config: PublisherConfig,
   topicInput: string,
 ): Promise<AiNewsItem[]> {
+  const key = config.perplexityApiKey?.trim();
+  if (!key) {
+    throw new Error('Perplexity API key not configured. Add it under AI & Publishing Settings on the phone.');
+  }
+
   const defaultTopic = 'Artificial Intelligence';
   const topic = (topicInput && topicInput.trim()) || defaultTopic;
-  const prompt =
-    `Provide the 5 most recent news events related to ${topic}.\n` +
-    ' \n' +
-    'Requirements:\n' +
-    '- Use reliable and recent sources.\n' +
-    '- Return the result strictly in JSON format.\n' +
-    '- Each item must contain the following fields:\n' +
-    '  - "title": short headline of the news\n' +
-    '  - "eventDateTime": event date and time in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM if available)\n' +
-    '  - "personas": array of notable people related to the event (empty array if none identified)\n' +
-    '  - "sourceUrl": direct URL to the primary news source (string)\n' +
-    '  - "description": a very brief summary (maximum 50 words; plain text)\n' +
-    'Output format example:\n' +
-    '[{"title": "...", "description": "...", "personas": ["CTO", "ML engineer"], "eventDateTime": "2026-03-12T10:00:00Z", "sourceUrl": "https://example.com/news"}]' +
-    '\n\n' +
-    'Return only the JSON array and no additional text.';
+  const query = `Recent news about ${topic}\n`+
+  'Search priority:\n' +
+  '- official website / newsroom / blog / press release pages\n' +
+  '- official social accounts\n' +
+  '- reposts and reactions on social media\n' +
+  '- reputable news sites that cite the original source\n' +
+  'Freshness requirements:\n' +
+  '- Prefer items from the last 72 hours\n' +
+  '- Do not use anything older than 7 days\n' +
+  '- If a result is older, exclude it unless essential for context\n';
 
-  const response = await callOpenAi<{
-    choices: { message: { content?: string } }[];
-  }>(config, {
-    model: config.openAiModel || 'gpt-4.1-mini',
-    messages: [
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-    temperature: 0.3,
+  const res = await fetch(PERPLEXITY_SEARCH_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      query,
+      max_results: 5,
+      max_tokens_per_page: 2048,
+      search_language_filter: ['en'],
+    }),
   });
 
-  const content = response.choices?.[0]?.message?.content ?? '[]';
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(content);
-  } catch (error) {
-    appendEventLog(`Failed to parse OpenAI response as JSON, content="${content}"`);
-    throw error;
+  if (!res.ok) {
+    const text = await res.text();
+    appendEventLog(`Perplexity Search error ${res.status}: ${text.slice(0, 500)}`);
+    throw new Error(`Perplexity Search error ${res.status}: ${text}`);
   }
 
-  if (!Array.isArray(parsed)) {
-    throw new Error('Expected OpenAI response to be a JSON array');
+  const data = (await res.json()) as PerplexitySearchResponse;
+  const results = data.results ?? [];
+  if (results.length === 0) {
+    appendEventLog('Perplexity Search returned no results.');
   }
 
-  return (parsed as any[]).map((item) => {
-    const rawTitle = String(item.title ?? '');
-    const rawDescription = String(item.description ?? '');
+  return results.map((item) => {
+    const rawTitle = String(item.title ?? '').trim() || 'Untitled';
+    const snippet = String(item.snippet ?? '').trim();
     return {
       title: normalizeDashes(rawTitle),
-      description: normalizeDashes(rawDescription),
-      personas: item.personas ?? [],
-      eventDateTime: item.eventDateTime ? String(item.eventDateTime) : undefined,
-      sourceUrl: item.sourceUrl ? String(item.sourceUrl) : undefined,
+      description: normalizeDashes(snippetToDescription(snippet, 50)),
+      personas: [] as string[],
+      eventDateTime: item.date ?? item.last_updated,
+      sourceUrl: item.url ? String(item.url) : undefined,
       raw: item,
     };
   });
@@ -95,7 +120,7 @@ export async function elaborateResearch(
   researchTitle: string,
 ): Promise<string> {
   const prompt =
-    'Write a LinkedIn post in the voice of a seasoned technology leader (Head of Software Engineering) reflecting on the deeper implications of a technology or AI-related event.' +
+    'Write a LinkedIn post in the voice of a seasoned technology leader reflecting on the deeper implications of a technology or AI-related event.' +
     '\n' +
     'Style requirements:\n' +
     '- The tone must be thoughtful, reflective, and authoritative, with calm leadership insight.\n' +

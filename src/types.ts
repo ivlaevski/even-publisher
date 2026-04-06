@@ -29,6 +29,8 @@ export interface Research {
 }
 
 export interface PublisherConfig {
+  /** Perplexity Search API — used only for `fetchLatestAiNews`. */
+  perplexityApiKey: string;
   openAiApiKey: string;
   openAiModel: string;
   wordpressBaseUrl: string;

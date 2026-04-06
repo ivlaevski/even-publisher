@@ -21,6 +21,12 @@ let state: SttState = {
 export async function startSttRecording(bridge: EvenAppBridge): Promise<void> {
   if (state.isListening) return;
 
+  if (typeof bridge.audioControl !== 'function') {
+    throw new Error(
+      'Microphone bridge unavailable (audioControl missing). Use the Even app on a phone with G2 connected.',
+    );
+  }
+
   state = {
     isListening: true,
     audioBuffer: [],
@@ -28,20 +34,29 @@ export async function startSttRecording(bridge: EvenAppBridge): Promise<void> {
     bridge,
   };
 
-  if (typeof bridge.audioControl === 'function') {
-    const ok = await bridge.audioControl(true);
-    if (!ok) {
-      state.isListening = false;
-      state.bridge = null;
-      throw new Error('Failed to open microphone on glasses.');
-    }
+  const ok = await bridge.audioControl(true);
+  if (!ok) {
+    state.isListening = false;
+    state.bridge = null;
+    throw new Error(
+      'Failed to open G2 microphone (audioControl returned false). Ensure g2-microphone is granted in app.json and startup UI was created.',
+    );
   }
 }
 
-export function feedSttAudio(pcmData: Uint8Array): void {
+/** PCM from G2: 16 kHz, s16le mono per Even Hub device API docs. */
+export function feedSttAudio(pcmData: Uint8Array | number[]): void {
   if (!state.isListening) return;
-  state.audioBuffer.push(new Uint8Array(pcmData));
-  state.totalBytes += pcmData.length;
+  const chunk = normalizePcmChunk(pcmData);
+  if (chunk.length === 0) return;
+  state.audioBuffer.push(chunk);
+  state.totalBytes += chunk.length;
+}
+
+function normalizePcmChunk(pcmData: Uint8Array | number[]): Uint8Array {
+  if (pcmData instanceof Uint8Array) return new Uint8Array(pcmData);
+  if (Array.isArray(pcmData)) return new Uint8Array(pcmData);
+  return new Uint8Array();
 }
 
 async function closeMic(): Promise<void> {

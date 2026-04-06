@@ -10,10 +10,16 @@
   "entrypoint": "index.html",
   "min_sdk_version": "0.1.0",
   "supported_languages": ["en"],
-  "permissions": {
-    "network": [
-      "*"
-    ]
-  }
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Uses OpenAI, ElevenLabs and WordPress APIs.",
+      "whitelist": ["*"]
+    },
+    {
+      "name": "g2-microphone",
+      "desc": "Required for G2 glasses microphone: bridge.audioControl and PCM audioEvent (16 kHz mono) for speech-to-text. See docs/guides/device-apis."
+    }
+  ]
 }
 
