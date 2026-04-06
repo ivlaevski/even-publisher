@@ -35,6 +35,34 @@ function snippetToDescription(snippet: string, maxWords: number): string {
 
 const PERPLEXITY_SEARCH_URL = 'https://api.perplexity.ai/search';
 
+/** Strip pasted "Bearer " prefix and whitespace so Authorization header is valid. */
+function normalizePerplexityApiKey(key: string): string {
+  let k = key.trim();
+  if (/^bearer\s+/i.test(k)) {
+    k = k.replace(/^bearer\s+/i, '').trim();
+  }
+  return k;
+}
+
+async function perplexityErrorMessage(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const j = JSON.parse(text) as {
+      error?: { message?: string; code?: number };
+      detail?: Array<{ msg?: string }>;
+    };
+    if (j.error?.message) {
+      return `${res.status} ${j.error.message}`;
+    }
+    if (Array.isArray(j.detail) && j.detail[0]?.msg) {
+      return `${res.status} ${j.detail[0].msg}`;
+    }
+  } catch {
+    /* use raw */
+  }
+  return `${res.status}: ${text.slice(0, 400)}`;
+}
+
 type PerplexitySearchHit = {
   title?: string;
   url?: string;
@@ -57,53 +85,74 @@ export async function fetchLatestAiNews(
   config: PublisherConfig,
   topicInput: string,
 ): Promise<AiNewsItem[]> {
-  const key = config.perplexityApiKey?.trim();
+  const key = normalizePerplexityApiKey(config.perplexityApiKey ?? '');
   if (!key) {
     throw new Error('Perplexity API key not configured. Add it under AI & Publishing Settings on the phone.');
   }
 
   const defaultTopic = 'Artificial Intelligence';
   const topic = (topicInput && topicInput.trim()) || defaultTopic;
-  const query = `Recent news about ${topic}`; //\n`+
-  //  'Search priority:\n' +
-  //  '- official website / newsroom / blog / press release pages\n' +
-  //  '- official social accounts\n' +
-  //  '- reposts and reactions on social media\n' +
-  //  '- reputable news sites that cite the original source\n' +
-  //  'Freshness requirements:\n' +
-  //  '- Prefer items from the last 72 hours\n' +
-  //  '- Do not use anything older than 7 days\n' +
-  //  '- If a result is older, exclude it unless essential for context\n';
+  const query = `Recent news about ${topic}`;
 
-  //let res: Response | null = null;
+  const fullRequestBody: Record<string, unknown> = {
+    query,
+    max_results: 5,
+    max_tokens_per_page: 2048,
+    search_recency_filter: 'week',
+    search_language_filter: ['en'],
+  };
+
+  const minimalRequestBody: Record<string, unknown> = {
+    query,
+    max_results: 5,
+  };
+
   let results: PerplexitySearchHit[] = [];
   try {
-    const res = await fetch(PERPLEXITY_SEARCH_URL, {
+    const headers = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${key}`,
+    } as const;
+
+    let res = await fetch(PERPLEXITY_SEARCH_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        'query': query,
-        'max_results': 5,
-        'max_tokens_per_page': 2048,
-        'search_language_filter': ['en'],
-      }),
+      headers,
+      body: JSON.stringify(fullRequestBody),
     });
-    if (!res || !res.ok) {
-      const text = await res?.text() ?? 'No response';
-      appendEventLog(`Perplexity Search error ${res?.status}: ${text.slice(0, 500)}`);
-      throw new Error(`Perplexity Search error ${res?.status}: ${text}`);
+
+    if (res.status === 422) {
+      appendEventLog('Perplexity Search: full request rejected (422), retrying minimal query + max_results.');
+      res = await fetch(PERPLEXITY_SEARCH_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(minimalRequestBody),
+      });
     }
+
+    if (!res.ok) {
+      const errText = await perplexityErrorMessage(res);
+      appendEventLog(`Perplexity Search failed: ${errText}`);
+      throw new Error(`Perplexity Search: ${errText}`);
+    }
+
     const data = (await res.json()) as PerplexitySearchResponse;
     results = data.results ?? [];
+    appendEventLog(`Perplexity Search ok: ${results.length} result(s).`);
   } catch (error) {
-    appendEventLog(`Perplexity Search error ${error}`);
-    throw error;
-  }
-  finally {
-    appendEventLog(`result ${JSON.stringify(results)}`);
+    const msg = error instanceof Error ? error.message : String(error);
+    const looksLikeNetworkFailure =
+      error instanceof TypeError ||
+      (error instanceof DOMException && error.name === 'NetworkError') ||
+      /load failed|failed to fetch|networkerror/i.test(msg);
+    if (looksLikeNetworkFailure && !(msg.startsWith('Perplexity Search:'))) {
+      const hint =
+        'Network request failed. Check phone connectivity and VPN. Ensure the Even app allows HTTPS to api.perplexity.ai (network permission). If the key is wrong you would usually see HTTP 401 instead.';
+      appendEventLog(`Perplexity Search: ${hint} (${msg})`);
+      throw new Error(hint);
+    }
+    appendEventLog(`Perplexity Search error: ${msg}`);
+    throw error instanceof Error ? error : new Error(msg);
   }
 
   if (results.length === 0) {
