@@ -15,6 +15,23 @@ import {
 let client: EvenPublisherClient | null = null;
 let statusTimer: number | null = null;
 
+const AI_SETTINGS_INPUT_IDS = [
+  'perplexity-key',
+  'openai-key',
+  'openai-model',
+  'elevenlabs-key',
+  'wp-url',
+  'wp-username',
+  'wp-password',
+] as const;
+
+function allAiSettingsFieldsFilled(): boolean {
+  return AI_SETTINGS_INPUT_IDS.every((id) => {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    return el != null && el.value.trim().length > 0;
+  });
+}
+
 function bootSettingsUi(): void {
   const config = loadConfigFromLocalStorage();
 
@@ -43,6 +60,43 @@ function bootSettingsUi(): void {
   if (wpUrlInput) wpUrlInput.value = config.wordpressBaseUrl;
   if (wpUserInput) wpUserInput.value = config.wordpressUsername;
   if (wpPassInput) wpPassInput.value = config.wordpressPassword;
+
+  const aiSettingsSummary = document.getElementById('ai-settings-summary');
+  const aiSettingsBody = document.getElementById('ai-settings-body');
+  const aiSettingsShowBtn = document.getElementById('ai-settings-show') as HTMLButtonElement | null;
+  const aiSettingsHideBtn = document.getElementById('ai-settings-hide') as HTMLButtonElement | null;
+
+  let aiSettingsExpanded = !allAiSettingsFieldsFilled();
+
+  const syncAiSettingsPanel = (): void => {
+    if (!aiSettingsSummary || !aiSettingsBody || !aiSettingsHideBtn) return;
+    const filled = allAiSettingsFieldsFilled();
+    const collapsed = filled && !aiSettingsExpanded;
+    aiSettingsSummary.hidden = !collapsed;
+    aiSettingsBody.hidden = collapsed;
+    aiSettingsHideBtn.hidden = collapsed || !filled;
+  };
+
+  syncAiSettingsPanel();
+
+  aiSettingsShowBtn?.addEventListener('click', () => {
+    aiSettingsExpanded = true;
+    syncAiSettingsPanel();
+  });
+
+  aiSettingsHideBtn?.addEventListener('click', () => {
+    aiSettingsExpanded = false;
+    syncAiSettingsPanel();
+  });
+
+  for (const id of AI_SETTINGS_INPUT_IDS) {
+    document.getElementById(id)?.addEventListener('input', () => {
+      if (!allAiSettingsFieldsFilled()) {
+        aiSettingsExpanded = true;
+      }
+      syncAiSettingsPanel();
+    });
+  }
 
   let topics = loadTopicsFromLocalStorage();
 
@@ -78,6 +132,10 @@ function bootSettingsUi(): void {
     saveConfigToLocalStorage(next);
     appendEventLog('Settings saved.');
     setStatus('Settings saved. You can now start a new research from glasses.');
+    if (allAiSettingsFieldsFilled()) {
+      aiSettingsExpanded = false;
+      syncAiSettingsPanel();
+    }
   });
 
   topicsAddBtn?.addEventListener('click', () => {

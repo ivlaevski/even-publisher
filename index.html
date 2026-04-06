@@ -196,6 +196,35 @@
           grid-template-columns: minmax(0, 1fr);
         }
       }
+
+      #ai-settings-summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.35rem 0.75rem;
+      }
+
+      #ai-settings-summary[hidden] {
+        display: none !important;
+      }
+
+      #ai-settings-body[hidden] {
+        display: none !important;
+      }
+
+      .ai-settings-header-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.35rem 0.75rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .ai-settings-header-row h2 {
+        margin: 0;
+      }
     </style>
   </head>
   <body>
@@ -209,7 +238,7 @@
       </header>
 
       <div class="grid">
-        <section class="card">
+        <section class="card" id="g2-connection">
           <h2>G2 Connection</h2>
           <p class="muted">Starts the Even Hub bridge and boots the glasses UI.</p>
           <div class="btn-row">
@@ -223,7 +252,7 @@
           </div>
         </section>
 
-        <section class="card">
+        <section class="card" id="prompt-topics">
           <h2>Prompt Topics</h2>
           <p class="muted">Manage the list of topics that will be available when starting new research on the glasses.</p>
 
@@ -239,7 +268,7 @@
           </div>
         </section>
 
-        <section class="card">
+        <section class="card" id="research-refinement">
           <h2>Prompt Research refinement</h2>
 
           <div id="research-status" class="muted" style="margin-bottom: 0.5rem;">
@@ -259,13 +288,24 @@
           </div>
         </section>
 
-        <section class="card">
-          <h2>AI &amp; Publishing Settings</h2>
-          <p class="muted">Stored only on this phone, used for API calls from this WebView.</p>
+        <section class="card" id="ai-settings">
+          <div id="ai-settings-summary" class="ai-settings-summary" hidden>
+            <p class="muted" style="margin: 0">
+              AI &amp; publishing settings are filled in. Expand to edit.
+            </p>
+            <button type="button" id="ai-settings-show" class="btn btn-ghost">Show settings</button>
+          </div>
+
+          <div id="ai-settings-body">
+            <div class="ai-settings-header-row">
+              <h2>AI &amp; Publishing Settings</h2>
+              <button type="button" id="ai-settings-hide" class="btn btn-ghost" hidden>Hide</button>
+            </div>
+            <p class="muted">Stored only on this phone, used for API calls from this WebView.</p>
 
           <label for="perplexity-key">Perplexity API key</label>
           <input id="perplexity-key" type="password" autocomplete="off" />
-          <p class="muted" style="margin-top: -0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
+          <p class="muted" style="margin-top: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
             Used for “new research” topic news (Search API). Get a key at
             <a href="https://www.perplexity.ai/settings/api" target="_blank" rel="noopener noreferrer"
               >perplexity.ai/settings/api</a
@@ -274,12 +314,24 @@
 
           <label for="openai-key">OpenAI API key</label>
           <input id="openai-key" type="password" autocomplete="off" />
+          <p class="muted" style="margin-top: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
+            Used for “research” and “refinement” voice prompts. Get a key at
+            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer"
+              >openai.com/api-keys</a
+            >.
+          </p>
 
           <label for="openai-model">OpenAI model</label>
-          <input id="openai-model" type="text" placeholder="gpt-4.1-mini" />
+          <input id="openai-model" type="text" placeholder="gpt-5.4-mini" />
 
           <label for="elevenlabs-key">ElevenLabs API key</label>
           <input id="elevenlabs-key" type="password" autocomplete="off" />
+          <p class="muted" style="margin-top: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
+            Used for voice synthesis. Get a key at
+            <a href="https://elevenlabs.com/settings/api-keys" target="_blank" rel="noopener noreferrer"
+              >elevenlabs.com/settings/api-keys</a
+            >.
+          </p>
 
           <label for="wp-url">WordPress base URL</label>
           <input id="wp-url" type="url" placeholder="https://your-site.com" />
@@ -292,6 +344,7 @@
 
           <div class="btn-row">
             <button id="save-settings" class="btn btn-primary">Save settings</button>
+          </div>
           </div>
         </section>
       </div>
