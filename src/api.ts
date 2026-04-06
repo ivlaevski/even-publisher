@@ -74,6 +74,20 @@ export async function fetchLatestAiNews(
    '- Do not use anything older than 7 days\n' +
    '- If a result is older, exclude it unless essential for context\n';
 
+   appendEventLog(`query ${query}`);
+   appendEventLog(`key ${key}`);
+   appendEventLog(`PERPLEXITY_SEARCH_URL ${PERPLEXITY_SEARCH_URL}`);
+   appendEventLog(`headers ${JSON.stringify({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${key}`,
+  })}`);
+  appendEventLog(`body ${JSON.stringify({
+    'query': query,
+    'max_results': 5,
+    'max_tokens_per_page': 2048,
+    'search_language_filter': ['en'],
+  })}`);
+  
   const res = await fetch(PERPLEXITY_SEARCH_URL, {
     method: 'POST',
     headers: {
