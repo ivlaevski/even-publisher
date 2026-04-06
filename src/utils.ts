@@ -93,9 +93,7 @@ export function loadConfigFromLocalStorage(): {
 } {
   return {
     googleGenerativeApiKey:
-      localStorage.getItem('even-publisher:google-generative-key') ??
-      localStorage.getItem('even-publisher:perplexity-key') ??
-      '',
+      localStorage.getItem('even-publisher:google-generative-key') ?? '',
     openAiApiKey: localStorage.getItem('even-publisher:openai-key') ?? '',
     openAiModel: localStorage.getItem('even-publisher:openai-model') ?? 'gpt-4.1-mini',
     wordpressBaseUrl: localStorage.getItem('even-publisher:wp-url') ?? '',
