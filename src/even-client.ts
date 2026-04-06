@@ -196,7 +196,7 @@ export class EvenPublisherClient {
           borderWidth: 0,
           borderColor: 5,
           paddingLength: 2,
-          content: 'by Ivan Vlaevski v.1.0.113',
+          content: 'by Ivan Vlaevski',
           isEventCapture: 0,
         }),
         new TextContainerProperty({
@@ -233,7 +233,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRadius: 0,
       paddingLength: 2,
-      content: 'Even Publisher 1.0.113',
+      content: 'Even Publisher',
       isEventCapture: 0,
     });
 
