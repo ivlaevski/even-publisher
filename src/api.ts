@@ -88,6 +88,8 @@ export async function fetchLatestAiNews(
     }),
   });
 
+  appendEventLog(`result ${JSON.stringify(res)}`);
+
   if (!res.ok) {
     const text = await res.text();
     appendEventLog(`Perplexity Search error ${res.status}: ${text.slice(0, 500)}`);
