@@ -785,6 +785,7 @@ export class EvenPublisherClient {
       this.ui.aiNews = await fetchLatestAiNews(config, topic);
       this.ui.aiSelectedIndex = 0;
       this.ui.selectedTopic = null;
+      appendEventLog(`Fetched ${this.ui.aiNews.length} news items for "${topic}"`);
       await this.renderAiNewsList();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
