@@ -1065,6 +1065,10 @@ export class EvenPublisherClient {
     try {
       setStatus('Updating research with AI prompt…');
       appendEventLog(`Applying prompt to research "${research.title}"`);
+      await this.showTextFullScreenWithTimer(
+        `Applying prompt…\n\n"${research.title}"\n\nPlease wait.`,
+        false,
+      );
       const updatedContent = await refineResearch(config, research, trimmed);
 
       const idx = this.state.researches.findIndex((r) => r.id === research.id);
@@ -1083,6 +1087,10 @@ export class EvenPublisherClient {
         await this.renderResearchDetail(updated);
       } else if (this.ui.view === 'ready-detail') {
         await this.renderReadyDetail(updated);
+      } else if (updated.status === 'ready') {
+        await this.renderReadyDetail(updated);
+      } else {
+        await this.renderResearchDetail(updated);
       }
 
       setStatus('Research updated from prompt.');

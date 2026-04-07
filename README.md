@@ -1,7 +1,21 @@
 Article Publisher – G2
 ====================
 
-Article Publisher is a companion app for the Even Realities G2 glasses that helps you discover current news on selected topics, generate reflective LinkedIn‑style posts with AI, refine them by voice or text, and schedule or publish them via WordPress – all driven primarily from the glasses, with configuration and topic management handled on the phone.
+Article Publisher is a companion app for the Even Realities G2 glasses that helps you discover current news on selected topics, generate reflective LinkedIn‑style posts with AI, refine them by voice or text, and publish them via WordPress – all driven primarily from the glasses, with configuration and topic management handled on the phone.
+
+## Third-party services
+
+Runtime integrations (API keys and base URLs are set in **AI & Publishing Settings** on the phone; see also `app.json` for network allowlisting):
+
+| Service | Role in this app | Documentation & accounts |
+|--------|-------------------|---------------------------|
+| **Even Realities** | G2 glasses, Even Hub WebView, [`EvenAppBridge`](https://www.npmjs.com/package/@evenrealities/even_hub_sdk) (SDK) | [evenrealities.com](https://www.evenrealities.com/) |
+| **Google Gemini** | Recent-topic news via Generative Language API + optional Google Search grounding | [Gemini API](https://ai.google.dev/gemini-api), [Google AI Studio (API keys)](https://aistudio.google.com/apikey), [Grounding with Google Search](https://ai.google.dev/gemini-api/docs/google-search) |
+| **OpenAI** | Chat Completions — elaborate news into drafts, refine research text | [platform.openai.com](https://platform.openai.com/), [API keys](https://platform.openai.com/api-keys), [Chat Completions](https://platform.openai.com/docs/api-reference/chat) |
+| **ElevenLabs** | Text-to-speech (read aloud), speech-to-text (`scribe_v2`-style STT) | [elevenlabs.io](https://elevenlabs.io/), [API keys](https://elevenlabs.com/settings/api-keys), [API docs](https://elevenlabs.io/docs) |
+| **WordPress (your site)** | Create/update posts through the REST API (your base URL) | [REST API handbook](https://developer.wordpress.org/rest-api/), [Application passwords](https://developer.wordpress.org/application-passwords/) |
+
+**API hosts used at runtime** (typical): `generativelanguage.googleapis.com`, `api.openai.com`, `api.elevenlabs.io`, and your own WordPress origin.
 
 ## Features
 
@@ -24,16 +38,13 @@ Article Publisher is a companion app for the Even Realities G2 glasses that help
 - **Start new research flow**
   - When you choose **Start new research** on the glasses:
     1. The client loads topics from the phone and, if any exist, shows a **topic selection** list.
-    2. After selecting a topic, the app calls OpenAI with a prompt like  
-       “Provide the 5 most recent news events related to \<selected topic\>”.
+    2. After selecting a topic, the app calls **Google Gemini** (with search grounding) for recent developments about that topic.
     3. A scrollable list of news items is shown; tapping opens details, and tapping again creates a **research draft**.
   - If no topics are configured on the phone, the flow falls back to the default topic “Artificial Intelligence”.
 
 - **AI integration**
-  - Uses OpenAI Chat Completions to:
-    - Fetch the 5 most recent news items for the selected topic (JSON‑only response).
-    - Elaborate a selected news item into a LinkedIn post draft in the voice of a seasoned technology leader.
-    - Apply refinement prompts to an existing draft while preserving tone and structure.
+  - **Google Gemini** — fetch recent, citation-friendly topic news (structured JSON).
+  - **OpenAI Chat Completions** — elaborate a selected news item into a draft, and apply refinement prompts while preserving tone and structure.
 
 - **Research lifecycle**
   - Draft researches are stored locally on the device (via Even Hub storage).
@@ -76,7 +87,8 @@ Article Publisher is a companion app for the Even Realities G2 glasses that help
 
 - **Settings on phone**
   - “AI & Publishing Settings” card provides inputs for:
-    - OpenAI API key and model.
+    - Google Gemini API key (news flow).
+    - OpenAI API key and model (drafting / refinement).
     - ElevenLabs API key.
     - WordPress base URL, username and application password/token.
   - Settings are stored only on the phone in `localStorage` and are read by the client before making any external API calls.
@@ -85,6 +97,7 @@ Article Publisher is a companion app for the Even Realities G2 glasses that help
 
 To use Article Publisher end‑to‑end you will need:
 
+- A **Google** account with **[Google AI Studio](https://aistudio.google.com/apikey)** (or equivalent) access for the **Gemini API**, used for the topic news step.
 - An **OpenAI account** and an API key with access to the selected chat model (e.g. `gpt-4.1-mini`).
 - An **ElevenLabs account** and an API key with access to:
   - Text‑to‑Speech (for read‑aloud).
@@ -111,7 +124,7 @@ Basic setup steps:
 
 3. **Configure external services**
    - In **AI & Publishing Settings**:
-     - Paste your **OpenAI API key** and desired model name.
+     - Paste your **Google Gemini API key**, **OpenAI API key** and desired model name.
      - Paste your **ElevenLabs API key**.
      - Set your **WordPress base URL**, username and application password/token.
    - In **Prompt Topics**:
@@ -126,11 +139,11 @@ Basic setup steps:
 - **`src/even-client.ts`**
   - Core Article Publisher client running inside the Even Hub WebView.
   - Manages UI state, view rendering on glasses, and all gesture handling.
-  - Orchestrates calls to OpenAI, ElevenLabs, and WordPress via helper modules.
+  - Orchestrates calls to Gemini, OpenAI, ElevenLabs, and WordPress via helper modules.
 
 - **`src/api.ts`**
-  - Wraps OpenAI and WordPress calls:
-    - `fetchLatestAiNews(config, topic)` – topic‑driven news retrieval.
+  - Wraps Gemini, OpenAI, and WordPress calls:
+    - `fetchLatestAiNews(config, topic)` – topic‑driven news via Gemini (+ search tool where enabled).
     - `elaborateResearch` – generate long‑form LinkedIn‑style content from a selected news item.
     - `refineResearch` – apply user prompts to existing research content.
     - `publishToWordPress` – create draft posts on a target WordPress site.
@@ -158,7 +171,7 @@ Basic setup steps:
 
 2. **Configure on phone (WebView)**  
    - Open the Article Publisher WebView on your phone.
-   - Enter your OpenAI and ElevenLabs keys, and WordPress credentials.
+   - Enter your Gemini, OpenAI, and ElevenLabs keys, and WordPress credentials.
    - Define one or more topics in the **Prompt Topics** card and save the list.
 
 3. **Connect G2 glasses**
