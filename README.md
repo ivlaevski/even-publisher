@@ -1,12 +1,12 @@
-Even Publisher – G2
+Article Publisher – G2
 ====================
 
-Even Publisher is a companion app for the Even Realities G2 glasses that helps you discover current news on selected topics, generate reflective LinkedIn‑style posts with AI, refine them by voice or text, and schedule or publish them via WordPress – all driven primarily from the glasses, with configuration and topic management handled on the phone.
+Article Publisher is a companion app for the Even Realities G2 glasses that helps you discover current news on selected topics, generate reflective LinkedIn‑style posts with AI, refine them by voice or text, and schedule or publish them via WordPress – all driven primarily from the glasses, with configuration and topic management handled on the phone.
 
 ## Features
 
 - **Main menu on glasses**
-  - Centered title `EvenPublisher` and subtitle `by Ivan Vlaevski v.1.0`.
+  - Centered title `Article Publisher` and subtitle `by Ivan Vlaevski v.1.0`.
   - Footer message: `Revolute to @ivanvlaevski`.
   - Menu options:
     - **Start new research** – discover fresh news and generate a new research draft.
@@ -83,7 +83,7 @@ Even Publisher is a companion app for the Even Realities G2 glasses that helps y
 
 ## Installation and preparation
 
-To use Even Publisher end‑to‑end you will need:
+To use Article Publisher end‑to‑end you will need:
 
 - An **OpenAI account** and an API key with access to the selected chat model (e.g. `gpt-4.1-mini`).
 - An **ElevenLabs account** and an API key with access to:
@@ -91,7 +91,7 @@ To use Even Publisher end‑to‑end you will need:
   - Speech‑to‑Text (for voice prompts).
 - A **WordPress site** configured to accept remote posting via the REST API:
   - Enable application passwords or token‑based authentication for the user that will create posts.
-  - Ensure the base URL is reachable from the device running the Even Publisher WebView.
+  - Ensure the base URL is reachable from the device running the Article Publisher WebView.
 
 Basic setup steps:
 
@@ -103,7 +103,7 @@ Basic setup steps:
 
 2. **Open the phone (Web) UI**
    - Launch the dev server in a browser on your phone (or the device hosting the Even Hub WebView).
-   - You should see the Even Publisher UI with:
+   - You should see the Article Publisher UI with:
      - G2 Connection card.
      - Prompt Topics card.
      - Prompt Research refinement card.
@@ -124,7 +124,7 @@ Basic setup steps:
 ## Architecture overview
 
 - **`src/even-client.ts`**
-  - Core Even Publisher client running inside the Even Hub WebView.
+  - Core Article Publisher client running inside the Even Hub WebView.
   - Manages UI state, view rendering on glasses, and all gesture handling.
   - Orchestrates calls to OpenAI, ElevenLabs, and WordPress via helper modules.
 
@@ -157,7 +157,7 @@ Basic setup steps:
    Run the project’s standard install/build commands (e.g. `npm install` / `npm run dev` or the commands defined in this repo).
 
 2. **Configure on phone (WebView)**  
-   - Open the Even Publisher WebView on your phone.
+   - Open the Article Publisher WebView on your phone.
    - Enter your OpenAI and ElevenLabs keys, and WordPress credentials.
    - Define one or more topics in the **Prompt Topics** card and save the list.
 

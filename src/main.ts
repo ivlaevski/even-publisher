@@ -210,6 +210,7 @@ function bootSettingsUi(): void {
     const noResearch = nextResearchId == null;
     if (promptSubmitBtn) promptSubmitBtn.disabled = noResearch;
     if (useTranscriptBtn) useTranscriptBtn.disabled = noResearch;
+    if (promptTextarea) promptTextarea.disabled = noResearch;
 
     if (!c) {
       researchStatus.textContent = NO_RESEARCH_ON_GLASSES;
@@ -229,7 +230,7 @@ async function main() {
   setStatus('Waiting for Even bridge…');
 
   bootSettingsUi();
-  appendEventLog('[main] bootSettingsUi ok');
+  //appendEventLog('[main] bootSettingsUi ok');
 
   const connectBtn = document.getElementById('connectBtn') as HTMLButtonElement | null;
 
@@ -244,7 +245,7 @@ async function main() {
       client = new EvenPublisherClient(bridge);
       await client.init();
       setStatus('Connected. Use glasses main menu to start.');
-      appendEventLog('Bridge connected and EvenPublisherClient initialised.');
+      appendEventLog('Bridge connected and Article Publisher client initialised.');
       document.getElementById('g2-connection-body')?.setAttribute('hidden', '');
       document.getElementById('g2-connection-connected')?.removeAttribute('hidden');
 

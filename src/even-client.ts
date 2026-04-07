@@ -97,7 +97,7 @@ export class EvenPublisherClient {
       const event = this.normalizeIncomingHubEvent(raw);
       void this.onEvenHubEvent(event);
     });
-    setStatus('Even Publisher connected. Use glasses to navigate menu.');
+    setStatus('Article Publisher connected. Use glasses to navigate menu.');
   }
 
   /** Poll until getDeviceInfo reports Connected, or timeout (browser / simulator may never report). */
@@ -118,7 +118,7 @@ export class EvenPublisherClient {
       }
 
       if (ct === DeviceConnectType.Connected) {
-        appendEventLog(`[startup] glasses Connected after ${(performance.now() - t0).toFixed(0)}ms`);
+        //appendEventLog(`[startup] glasses Connected after ${(performance.now() - t0).toFixed(0)}ms`);
         return;
       }
 
@@ -186,7 +186,7 @@ export class EvenPublisherClient {
           borderWidth: 0,
           borderColor: 5,
           paddingLength: 2,
-          content: 'Even Publisher for WordPress',
+          content: 'Article Publisher for WordPress',
           isEventCapture: 0,
         }),
         new TextContainerProperty({
@@ -236,7 +236,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRadius: 0,
       paddingLength: 2,
-      content: 'Even Publisher',
+      content: 'Article Publisher',
       isEventCapture: 0,
     });
 

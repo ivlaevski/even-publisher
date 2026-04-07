@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Even Publisher – G2</title>
+    <title>Article Publisher – G2</title>
     <style>
       body {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -81,6 +81,16 @@
         outline: 2px solid #4f46e5;
         outline-offset: 1px;
         border-color: transparent;
+      }
+
+      textarea:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      #research-refinement .btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
       }
 
       .btn {
@@ -235,7 +245,7 @@
   <body>
     <div id="app">
       <header>
-        <h1>Even Publisher <span class="app-version">%BUILD_VERSION%</span></h1>
+        <h1>Article Publisher <span class="app-version">%BUILD_VERSION%</span></h1>
         <p class="muted">
           Connect your G2 glasses, configure Gemini + search grounding, ElevenLabs,OpenAI and WordPress, then drive the whole publishing flow from the
           glasses.
@@ -273,6 +283,7 @@
           <textarea
             id="prompt-text"
             rows="3"
+            disabled
             placeholder="Example: Make the tone more optimistic and add a short call-to-action at the end."
           ></textarea>
 
