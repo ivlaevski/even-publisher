@@ -652,17 +652,17 @@ export class EvenPublisherClient {
     const textBody = this.sanitizeForDisplay(this.ui.researchPages[0] ?? '');
 
     await this.bridge.rebuildPageContainer(
-      new RebuildPageContainer({        
-            containerTotalNum: 1,
-            textObject: [
-              this.createFullScreenTextContainerProperty({
-                containerID: 400,
-                containerName: 'research-detail',
-                text: textBody,
-                isEventCapture: 1,
-              })
-            ],
-          }),
+      new RebuildPageContainer({
+        containerTotalNum: 1,
+        textObject: [
+          this.createFullScreenTextContainerProperty({
+            containerID: 400,
+            containerName: 'research-detail',
+            text: textBody,
+            isEventCapture: 1,
+          })
+        ],
+      }),
     );
 
     setStatus('Research: scroll to read, double-tap for menu.');
@@ -1336,11 +1336,13 @@ export class EvenPublisherClient {
   }
 
   private async onEvenHubEvent(event: EvenHubEvent): Promise<void> {
-    const pcm = event.audioEvent?.audioPcm as Uint8Array | number[] | undefined;
-    if (pcm instanceof Uint8Array) {
-      if (pcm.byteLength > 0) feedSttAudio(pcm);
-    } else if (Array.isArray(pcm) && pcm.length > 0) {
-      feedSttAudio(pcm);
+    if (event.audioEvent?.audioPcm) {
+      const pcm = event.audioEvent?.audioPcm as Uint8Array | number[] | undefined;
+      if (pcm instanceof Uint8Array) {
+        if (pcm.byteLength > 0) feedSttAudio(pcm);
+      } else if (Array.isArray(pcm) && pcm.length > 0) {
+        feedSttAudio(pcm);
+      }
     }
 
     // Do not return after audio: the host may attach audio alongside list events, or send

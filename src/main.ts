@@ -15,6 +15,8 @@ import {
 let client: EvenPublisherClient | null = null;
 let statusTimer: number | null = null;
 
+const NO_RESEARCH_ON_GLASSES = 'No research selected on glasses.';
+
 const AI_SETTINGS_INPUT_IDS = [
   'google-generative-key',
   'openai-key',
@@ -190,16 +192,32 @@ function bootSettingsUi(): void {
     }
   });
 
+  /** `undefined` = never synced yet (skip first clear so we do not wipe the box on cold start). */
+  let prevResearchIdForPromptClear: string | null | undefined;
+
   // Expose a small helper so we can update this from main()
-  (window as any).__evenPublisherUpdateResearchStatus = (client: EvenPublisherClient | null) => {
+  (window as any).__evenPublisherUpdateResearchStatus = (c: EvenPublisherClient | null) => {
     if (!researchStatus) return;
-    if (!client) {
-      researchStatus.textContent = 'No research selected on glasses.';
+
+    const nextResearchId = !c ? null : (c.getCurrentResearch()?.id ?? null);
+    if (prevResearchIdForPromptClear !== nextResearchId) {
+      if (prevResearchIdForPromptClear !== undefined && promptTextarea) {
+        promptTextarea.value = '';
+      }
+      prevResearchIdForPromptClear = nextResearchId;
+    }
+
+    const noResearch = nextResearchId == null;
+    if (promptSubmitBtn) promptSubmitBtn.disabled = noResearch;
+    if (useTranscriptBtn) useTranscriptBtn.disabled = noResearch;
+
+    if (!c) {
+      researchStatus.textContent = NO_RESEARCH_ON_GLASSES;
       return;
     }
-    const current = client.getCurrentResearch();
+    const current = c.getCurrentResearch();
     if (!current) {
-      researchStatus.textContent = 'No research selected on glasses.';
+      researchStatus.textContent = NO_RESEARCH_ON_GLASSES;
     } else {
       researchStatus.textContent = `Current research: ${current.title}`;
     }
@@ -210,8 +228,10 @@ async function main() {
   installGlobalErrorLogging();
   setStatus('Waiting for Even bridge…');
 
+  bootSettingsUi();
+  appendEventLog('[main] bootSettingsUi ok');
+
   const connectBtn = document.getElementById('connectBtn') as HTMLButtonElement | null;
-  
 
   const connect = async () => {
     if (client) {
@@ -225,6 +245,8 @@ async function main() {
       await client.init();
       setStatus('Connected. Use glasses main menu to start.');
       appendEventLog('Bridge connected and EvenPublisherClient initialised.');
+      document.getElementById('g2-connection-body')?.setAttribute('hidden', '');
+      document.getElementById('g2-connection-connected')?.removeAttribute('hidden');
 
       const updateStatusFn = (window as any).__evenPublisherUpdateResearchStatus as
         | ((client: EvenPublisherClient | null) => void)
@@ -245,11 +267,8 @@ async function main() {
     }
   };
 
-  // Auto-connect on load
+  // Auto-connect on load (after bootSettingsUi registers __evenPublisherUpdateResearchStatus)
   await connect();
-
-  bootSettingsUi();
-  appendEventLog('[main] bootSettingsUi ok');
 
   // Keep button as manual retry
   connectBtn?.addEventListener('click', () => {

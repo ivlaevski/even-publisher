@@ -1,5 +1,7 @@
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk';
 
+import { appendEventLog } from './utils';
+
 type SttState = {
   isListening: boolean;
   audioBuffer: Uint8Array[];
@@ -44,7 +46,10 @@ export async function startSttRecording(bridge: EvenAppBridge): Promise<void> {
   }
 }
 
-/** PCM from G2: 16 kHz, s16le mono per Even Hub device API docs. */
+/**
+ * PCM from G2: 16 kHz, signed 16-bit little-endian, mono (2 bytes/sample).
+ * Chunks are buffered and wrapped as WAV in `stopSttAndTranscribe` for ElevenLabs.
+ */
 export function feedSttAudio(pcmData: Uint8Array | number[]): void {
   if (!state.isListening) return;
   const chunk = normalizePcmChunk(pcmData);
@@ -81,9 +86,15 @@ export async function stopSttAndTranscribe(apiKey: string): Promise<string> {
     return '';
   }
 
+  const pcmByteLength = state.totalBytes;
   const wavBlob = pcmToWav(state.audioBuffer);
   state.audioBuffer = [];
   state.totalBytes = 0;
+
+  const durationMs = Math.round((pcmByteLength / 2 / SAMPLE_RATE) * 1000);
+  appendEventLog(
+    `[STT] Sending audio for transcription: ${pcmByteLength} bytes PCM (~${durationMs} ms at ${SAMPLE_RATE} Hz, 16-bit LE mono) → ElevenLabs scribe_v2`,
+  );
 
   const formData = new FormData();
   formData.append('file', wavBlob, 'audio.wav');
@@ -98,12 +109,17 @@ export async function stopSttAndTranscribe(apiKey: string): Promise<string> {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`ElevenLabs STT error ${response.status}: ${text}`);
+    const errBody = await response.text();
+    appendEventLog(`[STT] Transcription request failed: HTTP ${response.status} ${errBody.slice(0, 200)}`);
+    throw new Error(`ElevenLabs STT error ${response.status}: ${errBody}`);
   }
 
   const json = (await response.json()) as any;
   const text = typeof json.text === 'string' ? json.text.trim() : '';
+  const preview = text.length <= 120 ? text : `${text.slice(0, 117)}…`;
+  appendEventLog(
+    `[STT] Transcription returned: ${text.length} character(s)${text ? ` — "${preview}"` : ' (empty)'}`,
+  );
   return text;
 }
 

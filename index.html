@@ -225,6 +225,11 @@
       .ai-settings-header-row h2 {
         margin: 0;
       }
+
+      #g2-connection-body[hidden],
+      #g2-connection-connected[hidden] {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
@@ -232,40 +237,29 @@
       <header>
         <h1>Even Publisher <span class="app-version">%BUILD_VERSION%</span></h1>
         <p class="muted">
-          Connect your G2 glasses, configure OpenAI and WordPress, then drive the whole publishing flow from the
+          Connect your G2 glasses, configure Gemini + search grounding, ElevenLabs,OpenAI and WordPress, then drive the whole publishing flow from the
           glasses.
         </p>
       </header>
 
       <div class="grid">
         <section class="card" id="g2-connection">
-          <h2>G2 Connection</h2>
-          <p class="muted">Starts the Even Hub bridge and boots the glasses UI.</p>
-          <div class="btn-row">
-            <button id="connectBtn" class="btn btn-primary">
-              Connect glasses
-            </button>            
+          <div id="g2-connection-body">
+            <h2>G2 Connection</h2>
+            <p class="muted">Starts the Even Hub bridge and boots the glasses UI.</p>
+            <div class="btn-row">
+              <button id="connectBtn" class="btn btn-primary">
+                Connect glasses
+              </button>
+            </div>
+            <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #6b7280;">
+              <span class="badge">Tip</span>
+              &nbsp;On the glasses, use tap, double-tap and swipe gestures to navigate menus.
+            </div>
           </div>
-          <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #6b7280;">
-            <span class="badge">Tip</span>
-            &nbsp;On the glasses, use tap, double-tap and swipe gestures to navigate menus.
-          </div>
-        </section>
-
-        <section class="card" id="prompt-topics">
-          <h2>Prompt Topics</h2>
-          <p class="muted">Manage the list of topics that will be available when starting new research on the glasses.</p>
-
-          <label for="new-topic">Add topic</label>
-          <input id="new-topic" type="text" placeholder="e.g. Artificial Intelligence, Quantum computing…" />
-
-          <ul id="topics-list" class="topic-list"></ul>
-
-          <div class="btn-row">
-            <button id="topics-add" class="btn btn-primary">Add topic</button>
-            <button id="topics-delete" class="btn btn-ghost">Delete selected</button>
-            <button id="topics-save" class="btn btn-ghost">Save list</button>
-          </div>
+          <p id="g2-connection-connected" class="muted" hidden style="margin: 0">
+            Bridge connected — use the glasses main menu.
+          </p>
         </section>
 
         <section class="card" id="research-refinement">
@@ -283,8 +277,28 @@
           ></textarea>
 
           <div class="btn-row">
-            <button id="prompt-submit" class="btn btn-primary">Apply prompt to research</button>
-            <button id="use-transcript" class="btn btn-ghost">Use last voice transcript</button>
+            <button id="prompt-submit" class="btn btn-primary" type="button" disabled>
+              Apply prompt to research
+            </button>
+            <button id="use-transcript" class="btn btn-ghost" type="button" disabled>
+              Use last voice transcript
+            </button>
+          </div>
+        </section>
+
+        <section class="card" id="prompt-topics">
+          <h2>Prompt Topics</h2>
+          <p class="muted">Manage the list of topics that will be available when starting new research on the glasses.</p>
+
+          <label for="new-topic">Add topic</label>
+          <input id="new-topic" type="text" placeholder="e.g. Artificial Intelligence, Quantum computing…" />
+
+          <ul id="topics-list" class="topic-list"></ul>
+
+          <div class="btn-row">
+            <button id="topics-add" class="btn btn-primary">Add topic</button>
+            <button id="topics-delete" class="btn btn-ghost">Delete selected</button>
+            <button id="topics-save" class="btn btn-ghost">Save list</button>
           </div>
         </section>
 
