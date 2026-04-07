@@ -32,6 +32,15 @@ const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
 
 const MAX_CONTENT_LENGTH = 900 - 25;
 
+/** Top-left timer overlay for `showTextFullScreenWithTimer` (must match `textContainerUpgrade` calls). */
+const FULL_SCREEN_TIMER_CONTAINER_ID = 8;
+
+function formatElapsedMmSs(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 type ResearchState = {
   researches: Research[];
 };
@@ -81,6 +90,10 @@ export class EvenPublisherClient {
   private readAloudLines: string[] = [];
   private readAloudLineIndex = 0;
   private cancelMode: 'draft' | 'ready' | null = null;
+
+  /** Cleared whenever the glasses page is rebuilt so upgrades never hit a stale container. */
+  private fullScreenTimerInterval: ReturnType<typeof setInterval> | null = null;
+  private fullScreenTimerStartedAtMs: number | null = null;
 
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
@@ -296,7 +309,7 @@ export class EvenPublisherClient {
     appendEventLog(
       `createStartUpPageContainer code=${result}; trying rebuildPageContainer fallback`,
     );
-    const rebuilt = await this.bridge.rebuildPageContainer(
+    const rebuilt = await this.applyRebuildPageContainer(
       new RebuildPageContainer(startupPayload),
     );
     if (rebuilt) {
@@ -397,14 +410,14 @@ export class EvenPublisherClient {
     return new TextContainerProperty({
       containerID: args.containerID,
       containerName: args.containerName,
-      xPosition: 0,
-      yPosition: 0,
-      width: 576,
-      height: 288,
+      xPosition: 10,
+      yPosition: 10,
+      width: 556,
+      height: 268,
       borderWidth: 0,
       borderColor: 5,
       borderRadius: 0,
-      paddingLength: 4,
+      paddingLength: 0,
       content: contentText,
       isEventCapture: args.isEventCapture ?? 1,
     });
@@ -461,9 +474,50 @@ export class EvenPublisherClient {
     return this.state.researches.filter((r) => r.status === 'ready');
   }
 
+  private stopFullScreenTimer(): void {
+    if (this.fullScreenTimerInterval != null) {
+      window.clearInterval(this.fullScreenTimerInterval);
+      this.fullScreenTimerInterval = null;
+    }
+    this.fullScreenTimerStartedAtMs = null;
+  }
+
+  /** Any full page rebuild invalidates the timer container — stop the interval first. */
+  private async applyRebuildPageContainer(payload: RebuildPageContainer): Promise<boolean> {
+    this.stopFullScreenTimer();
+    return this.bridge.rebuildPageContainer(payload);
+  }
+
+  private async refreshFullScreenTimerLabel(): Promise<void> {
+    if (this.fullScreenTimerStartedAtMs == null) return;
+    const sec = Math.floor((Date.now() - this.fullScreenTimerStartedAtMs) / 1000);
+    const label = formatElapsedMmSs(sec);
+    try {
+      await this.bridge.textContainerUpgrade(
+        new TextContainerUpgrade({
+          containerID: FULL_SCREEN_TIMER_CONTAINER_ID,
+          containerName: 'fullscreen-timer',
+          contentOffset: 0,
+          contentLength: 32,
+          content: label,
+        }),
+      );
+    } catch {
+      // View may have been replaced; interval will be cleared on next rebuild.
+    }
+  }
+
+  private startFullScreenTimer(): void {
+    this.stopFullScreenTimer();
+    this.fullScreenTimerStartedAtMs = Date.now();
+    this.fullScreenTimerInterval = window.setInterval(() => {
+      void this.refreshFullScreenTimerLabel();
+    }, 1000);
+  }
+
   private async showTextFullScreen(content: string, captureEvents = true): Promise<void> {
     const textBody = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         textObject: [
@@ -479,10 +533,55 @@ export class EvenPublisherClient {
     setStatus(`showTextFullScreen: ${textBody}`);
   }
 
+  /**
+   * Like `showTextFullScreen`, plus a top-left mm:ss timer (from 00:00) that updates every second.
+   * The interval runs in parallel with other async work (e.g. network); timer ticks only send
+   * `textContainerUpgrade` on the small timer container, not blocking your awaits elsewhere.
+   */
+  private async showTextFullScreenWithTimer(content: string, captureEvents = true): Promise<void> {
+    const textBody = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
+    const timerOverlay = new TextContainerProperty({
+      containerID: FULL_SCREEN_TIMER_CONTAINER_ID,
+      containerName: 'fullscreen-timer',
+      xPosition: 8,
+      yPosition: 4,
+      width: 86,
+      height: 28,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 0,
+      content: formatElapsedMmSs(0),
+      isEventCapture: 0,
+    });
+    const body = new TextContainerProperty({
+      containerID: 10,
+      containerName: 'body',
+      xPosition: 10,
+      yPosition: 38,
+      width: 556,
+      height: 240,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 0,
+      content: this.ensureNonEmptyDisplayText(textBody),
+      isEventCapture: captureEvents ? 1 : 0,
+    });
+    await this.applyRebuildPageContainer(
+      new RebuildPageContainer({
+        containerTotalNum: 2,
+        textObject: [timerOverlay, body],
+      }),
+    );
+    setStatus(`showTextFullScreenWithTimer: ${textBody}`);
+    this.startFullScreenTimer();
+  }
+
   private async renderMainMenu(): Promise<void> {
     this.ui.view = 'main-menu';
     // After the one-time createStartUpPageContainer, only rebuild (SDK).
-    await this.bridge.rebuildPageContainer(this.buildMainMenuRebuildPayload());
+    await this.applyRebuildPageContainer(this.buildMainMenuRebuildPayload());
 
     setStatus('Main menu: tap to choose an option.');
   }
@@ -490,7 +589,7 @@ export class EvenPublisherClient {
   private async renderNewResearchLoading(message: string): Promise<void> {
     this.ui.view = 'new-research-loading';
     this.ui.loadingMessage = message;
-    await this.showTextFullScreen(message);
+    await this.showTextFullScreenWithTimer(message);
   }
 
   private async renderTopicSelect(): Promise<void> {
@@ -528,7 +627,7 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
@@ -576,7 +675,7 @@ export class EvenPublisherClient {
       );
     }
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: textObjects.length,
         textObject: textObjects,
@@ -646,7 +745,7 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
@@ -666,7 +765,7 @@ export class EvenPublisherClient {
     this.ui.researchPageIndex = 0;
     const textBody = this.sanitizeForDisplay(this.ui.researchPages[0] ?? '');
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         textObject: [
@@ -709,7 +808,7 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
@@ -731,7 +830,7 @@ export class EvenPublisherClient {
     this.ui.readyPageIndex = 0;
     const textBody = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '');
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         textObject: [
@@ -983,7 +1082,7 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
@@ -1027,7 +1126,7 @@ export class EvenPublisherClient {
 
     const questionText = this.ensureNonEmptyDisplayText(this.sanitizeForDisplay(question));
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 2,
         textObject: [
@@ -1085,7 +1184,7 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
@@ -1136,7 +1235,7 @@ export class EvenPublisherClient {
       `${line}\n\nTap = pause · Scroll down = next line · Scroll up = replay · Double-tap = back`,
     );
 
-    await this.bridge.rebuildPageContainer(
+    await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         textObject: [
