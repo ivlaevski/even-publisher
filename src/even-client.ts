@@ -334,7 +334,7 @@ export class EvenPublisherClient {
       // +1 to account for the newline we add when joining (except possibly last)
       const extra = line.length + (currentLines.length > 0 ? 1 : 0);
       if (currentLength + extra > MAX_CONTENT_LENGTH && currentLines.length > 0) {
-        pages.push(currentLines.join('\n') + '... [ page break; next page number: ' + (pages.length + 1) + ']\n\n');
+        pages.push(currentLines.join('\n'));// + '... [ page break; next page number: ' + (pages.length + 1) + ']\n\n');
         currentLines = [line];
         currentLength = line.length;
       } else {
@@ -425,15 +425,25 @@ export class EvenPublisherClient {
   private async updateResearchDetailPage(research: Research): Promise<void> {
     if (!this.ui.researchPages.length) {
       const header = `${research.title}\n\n`;
-      const footer =
-        '\n\nScroll = Read more\nDouble-tap = Open menu (Prompt / Ready for Publish / Exit)';
-      const full = header + research.content + footer;
+      //const footer =
+      //  '\n\nScroll = Read more\nDouble-tap = Open menu (Prompt / Ready for Publish / Exit)';
+      const full = header + research.content; // + footer;
       this.ui.researchPages = this.buildPages(full);
       this.ui.researchPageIndex = clamp(this.ui.researchPageIndex, 0, this.ui.researchPages.length - 1);
     }
 
     const rawPage = this.ui.researchPages[this.ui.researchPageIndex] ?? '';
     const page = this.ensureNonEmptyDisplayText(this.sanitizeForDisplay(rawPage));
+
+    await this.bridge.textContainerUpgrade(
+      new TextContainerUpgrade({
+        containerID: 2,
+        containerName: 'fullscreen-info-text',
+        contentOffset: 0,
+        contentLength: MAX_CONTENT_LENGTH,
+        content: `[${this.ui.researchPageIndex + 1}/${this.ui.researchPages.length}][Scroll=read more][DTap=menu]`
+      }),
+    );
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
@@ -527,7 +537,7 @@ export class EvenPublisherClient {
       borderWidth: 1,
       borderColor: 5,
       borderRadius: 2,
-      paddingLength: 0,
+      paddingLength: 1,
       content: infoText,
       isEventCapture: 0,
     });
@@ -660,7 +670,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    const maxItems = 5;
+    const maxItems = 4;
     const pageStart = Math.floor(this.ui.aiSelectedIndex / maxItems) * maxItems;
     const selectedSlot = this.ui.aiSelectedIndex - pageStart;
     const rowHeight = Math.floor(288 / maxItems);
@@ -773,10 +783,26 @@ export class EvenPublisherClient {
     this.ui.researchPageIndex = 0;
     const textBody = this.sanitizeForDisplay(this.ui.researchPages[0] ?? '');
 
+    const infoTextOverlay = new TextContainerProperty({
+      containerID: 2,
+      containerName: 'fullscreen-info-text',
+      xPosition: 8,
+      yPosition: 0,
+      width: 556,
+      height: 30,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRadius: 2,
+      paddingLength: 0,
+      content: `[${this.ui.researchPageIndex + 1}/${this.ui.researchPages.length}][Scroll=read more][DTap=menu]`,
+      isEventCapture: 0,
+    });
+
     await this.applyRebuildPageContainer(
       new RebuildPageContainer({
-        containerTotalNum: 1,
+        containerTotalNum: 2,
         textObject: [
+          infoTextOverlay,
           this.createFullScreenTextContainerProperty({
             containerID: 400,
             containerName: 'research-detail',
@@ -831,17 +857,33 @@ export class EvenPublisherClient {
     this.currentResearchId = research.id;
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
     const header = `${research.title}\n\nPublish delay (days): ${delay}\n\n`;
-    const footer = '\n\nDouble-tap for menu';
+    //const footer = '\n\nDouble-tap for menu';
 
-    const full = header + research.content + footer;
+    const full = header + research.content; // + footer;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = 0;
     const textBody = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '');
 
+    const infoTextOverlay = new TextContainerProperty({
+      containerID: 2,
+      containerName: 'fullscreen-info-text',
+      xPosition: 8,
+      yPosition: 0,
+      width: 556,
+      height: 30,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRadius: 2,
+      paddingLength: 0,
+      content: `[${this.ui.readyPageIndex + 1}/${this.ui.readyPages.length}][Scroll=read more][DTap=menu]`,
+      isEventCapture: 0,
+    });
+
     await this.applyRebuildPageContainer(
       new RebuildPageContainer({
-        containerTotalNum: 1,
+        containerTotalNum: 2,
         textObject: [
+          infoTextOverlay,
           this.createFullScreenTextContainerProperty({
             containerID: 600,
             containerName: 'ready-detail',
@@ -855,13 +897,22 @@ export class EvenPublisherClient {
 
   private async updateReadyDelayText(research: Research): Promise<void> {
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
-    const header = `${research.title}\n\nPublish delay (days): ${delay}\n\n`;
-    const footer = '\n\nDouble-tap for menu';
-    const full = header + research.content + footer;
+    const header = `${research.title}\n\n`;    
+    const full = header + research.content;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = clamp(this.ui.readyPageIndex, 0, this.ui.readyPages.length - 1);
     const rawPage = this.ui.readyPages[this.ui.readyPageIndex] ?? '';
     const page = this.ensureNonEmptyDisplayText(this.sanitizeForDisplay(rawPage));
+
+    await this.bridge.textContainerUpgrade(
+      new TextContainerUpgrade({
+        containerID: 2,
+        containerName: 'fullscreen-info-text',
+        contentOffset: 0,
+        contentLength: MAX_CONTENT_LENGTH,
+        content: `[${this.ui.readyPageIndex + 1}/${this.ui.readyPages.length}][Scroll=read more][DTap=menu]`,
+      }),
+    );
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
