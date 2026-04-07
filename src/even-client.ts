@@ -410,9 +410,9 @@ export class EvenPublisherClient {
       containerID: args.containerID,
       containerName: args.containerName,
       xPosition: 10,
-      yPosition: 10,
+      yPosition: 32,
       width: 556,
-      height: 268,
+      height: 255,
       borderWidth: 0,
       borderColor: 5,
       borderRadius: 0,
@@ -523,7 +523,7 @@ export class EvenPublisherClient {
       xPosition: 8,
       yPosition: 0,
       width: 556,
-      height: 28,
+      height: 30,
       borderWidth: 1,
       borderColor: 5,
       borderRadius: 2,
@@ -930,9 +930,9 @@ export class EvenPublisherClient {
       return;
     }
 
-    await this.renderNewResearchLoading('Creating research draft…');
+    await this.renderNewResearchLoading('Creating article draft…');
 
-    const title = item.title || 'AI Research';
+    const title = item.title || 'Article (draft)';
     let content: string;
     try {
       content = await elaborateResearch(config, item, title);
@@ -1247,10 +1247,26 @@ export class EvenPublisherClient {
       `${line}\n\nTap = pause · Scroll down = next line · Scroll up = replay · Double-tap = back`,
     );
 
+    const infoTextOverlay = new TextContainerProperty({
+      containerID: 2,
+      containerName: 'fullscreen-info-text',
+      xPosition: 8,
+      yPosition: 0,
+      width: 556,
+      height: 30,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRadius: 2,
+      paddingLength: 0,
+      content: '[Tap=pause][Down=next line][Up=replay][DTap=back]',
+      isEventCapture: 0,
+    });
+
     await this.applyRebuildPageContainer(
       new RebuildPageContainer({
-        containerTotalNum: 1,
+        containerTotalNum: 2,
         textObject: [
+          infoTextOverlay,
           this.createFullScreenTextContainerProperty({
             containerID: 1400 + this.readAloudLineIndex,
             containerName: 'research-read-aloud',
