@@ -244,27 +244,12 @@ export class EvenPublisherClient {
       xPosition: 20,
       yPosition: 40,
       width: 300,
-      height: 40,
+      height: 140,
       borderWidth: 0,
       borderColor: 5,
       borderRadius: 0,
       paddingLength: 2,
-      content: 'Article Publisher for WordPress',
-      isEventCapture: 0,
-    });
-
-    const subtitle = new TextContainerProperty({
-      containerID: 3,
-      containerName: 'subtitle',
-      xPosition: 20,
-      yPosition: 65,
-      width: 350,
-      height: 40,
-      borderWidth: 0,
-      borderColor: 5,
-      borderRadius: 0,
-      paddingLength: 2,
-      content: "------------------------------------------\nProductivity wherever you go",
+      content: 'Article Publisher for WordPress\n------------------------------------------\nProductivity wherever you go',
       isEventCapture: 0,
     });
 
@@ -284,8 +269,8 @@ export class EvenPublisherClient {
     });
 
     const startupPayload = {
-      containerTotalNum: 3,
-      textObject: [title, subtitle, hint],
+      containerTotalNum: 2,
+      textObject: [title, hint],
     };
 
     const tryCreate = () =>
@@ -527,6 +512,21 @@ export class EvenPublisherClient {
   private async showTextFullScreen(content: string, infoText?: string): Promise<void> { // captureEvents = true
     const textBody = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
     if (!infoText) { infoText = '...'; }
+    const contentText = this.ensureNonEmptyDisplayText(textBody);
+    const body = new TextContainerProperty({
+      containerID: 1,
+      containerName: 'body',
+      xPosition: 10,
+      yPosition: 32,
+      width: 556,
+      height: 255,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 0,
+      content: contentText,
+      isEventCapture: 1,
+    });
     const infoTextOverlay = new TextContainerProperty({
       containerID: 2,
       containerName: 'fullscreen-info-text',
@@ -546,12 +546,7 @@ export class EvenPublisherClient {
         containerTotalNum: 2,
         textObject: [
           infoTextOverlay,
-          this.createFullScreenTextContainerProperty({
-            containerID: 10,
-            containerName: 'body',
-            text: textBody,
-            isEventCapture: 1,
-          }),
+          body,
         ],
       }),
     );
@@ -631,7 +626,7 @@ export class EvenPublisherClient {
     }
 
     const items = topics.map((topic, index) => `${index + 1}. ${topic}`);
-    items.push('⟵ Back to main menu');
+    items.push('<- Back to main menu');
 
     const list = new ListContainerProperty({
       containerID: 150,
@@ -670,7 +665,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    const maxItems = 4;
+    const maxItems = 3;
     const pageStart = Math.floor(this.ui.aiSelectedIndex / maxItems) * maxItems;
     const selectedSlot = this.ui.aiSelectedIndex - pageStart;
     const rowHeight = Math.floor(288 / maxItems);
@@ -741,7 +736,7 @@ export class EvenPublisherClient {
     const drafts = this.getDraftResearches();
 
     const items = drafts.map((r, idx) => `${idx + 1}. ${r.title.slice(0, 60)}`);
-    items.push('⟵ Back');
+    items.push('<- Back');
 
     const list = new ListContainerProperty({
       containerID: 300,
@@ -820,7 +815,7 @@ export class EvenPublisherClient {
     this.ui.view = 'ready-list';
     const ready = this.getReadyResearches();
     const items = ready.map((r, idx) => `${idx + 1}. ${r.title.slice(0, 60)}`);
-    items.push('⟵ Back');
+    items.push('<- Back');
 
     const list = new ListContainerProperty({
       containerID: 500,
@@ -897,7 +892,7 @@ export class EvenPublisherClient {
 
   private async updateReadyDelayText(research: Research): Promise<void> {
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
-    const header = `${research.title}\n\n`;    
+    const header = `${research.title}\n\n`;
     const full = header + research.content;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = clamp(this.ui.readyPageIndex, 0, this.ui.readyPages.length - 1);
@@ -1122,7 +1117,7 @@ export class EvenPublisherClient {
       setStatus('Published to WordPress and removed from lists.');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-        await this.showTextFullScreen(`Failed to publish.\n\n${message}`, '[Tab=back]');
+      await this.showTextFullScreen(`Failed to publish.\n\n${message}`, '[Tab=back]');
       this.ui.view = 'error';
     }
   }
@@ -1269,7 +1264,7 @@ export class EvenPublisherClient {
     if (!config.elevenLabsApiKey?.trim()) {
       await this.showTextFullScreen(
         `${research.title}\n\n` +
-        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',  
+        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',
         '[Tab=back]'
       );
       this.ui.view = 'error';
@@ -1409,7 +1404,7 @@ export class EvenPublisherClient {
     if (!config.elevenLabsApiKey) {
       await this.showTextFullScreen(
         `${research.title}\n\n` +
-        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',        
+        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',
         '[Tab=back]'
       );
       return;
@@ -1443,7 +1438,7 @@ export class EvenPublisherClient {
 
       if (!transcript.trim()) {
         await this.showTextFullScreen(
-          `${research.title}\n\nNo speech captured.\n\nSpeak for a bit longer and try again.`,    
+          `${research.title}\n\nNo speech captured.\n\nSpeak for a bit longer and try again.`,
           '[Tab=back]'
         );
         return;
