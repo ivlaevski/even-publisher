@@ -514,20 +514,20 @@ export class EvenPublisherClient {
     }, 1000);
   }
 
-  private async showTextFullScreen(content: string, captureEvents = true, infoText?: string): Promise<void> {
+  private async showTextFullScreen(content: string, infoText?: string): Promise<void> { // captureEvents = true
     const textBody = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
     if (!infoText) { infoText = '...'; }
     const infoTextOverlay = new TextContainerProperty({
       containerID: 2,
       containerName: 'fullscreen-info-text',
       xPosition: 8,
-      yPosition: 1,
+      yPosition: 0,
       width: 556,
       height: 28,
-      borderWidth: 0,
+      borderWidth: 1,
       borderColor: 5,
       borderRadius: 2,
-      paddingLength: 1,
+      paddingLength: 0,
       content: infoText,
       isEventCapture: 0,
     });
@@ -540,7 +540,7 @@ export class EvenPublisherClient {
             containerID: 10,
             containerName: 'body',
             text: textBody,
-            isEventCapture: captureEvents ? 1 : 0,
+            isEventCapture: 1,
           }),
         ],
       }),
@@ -614,7 +614,6 @@ export class EvenPublisherClient {
     if (!topics.length) {
       await this.showTextFullScreen(
         'No topics defined on phone.\n\nUse the phone screen to add topics, then try again.',
-        false,
         'Configuration error'
       );
       this.ui.view = 'error';
@@ -657,7 +656,7 @@ export class EvenPublisherClient {
   private async renderAiNewsList(): Promise<void> {
     this.ui.view = 'new-research-list';
     if (this.ui.aiNews.length === 0) {
-      await this.showTextFullScreen('No results.', false, '[Tab=back]');
+      await this.showTextFullScreen('No results.', '[Tab=back]');
       return;
     }
 
@@ -722,7 +721,7 @@ export class EvenPublisherClient {
     //lines.push('Double-tap = Back to list');
 
     const content = this.sanitizeForDisplay(lines.join('\n'));
-    await this.showTextFullScreen(content, false, '[Tab=select][DTab=back]');
+    await this.showTextFullScreen(content, '[Tab=select][DTab=back]');
 
     setStatus('Detail: tap to select, double-tap to go back to list.');
   }
@@ -890,7 +889,6 @@ export class EvenPublisherClient {
     if (!config.googleGenerativeApiKey?.trim()) {
       await this.showTextFullScreen(
         'Google Gemini API key missing.\n\nSet it under AI & Publishing Settings on the phone, then try again.',
-        false,
         'Configuration error'
       );
       return;
@@ -914,7 +912,7 @@ export class EvenPublisherClient {
       await this.renderAiNewsList();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await this.showTextFullScreen(`Failed to fetch AI news.\n\n${message}`,false, '[Tab=back]');
+      await this.showTextFullScreen(`Failed to fetch AI news.\n\n${message}`, '[Tab=back]');
       this.ui.view = 'error';
     }
   }
@@ -927,7 +925,6 @@ export class EvenPublisherClient {
     if (!config.openAiApiKey) {
       await this.showTextFullScreen(
         'OpenAI API key missing.\n\nSet the key on the phone screen, then try again.',
-        false,
         'Configuration error'
       );
       return;
@@ -941,7 +938,7 @@ export class EvenPublisherClient {
       content = await elaborateResearch(config, item, title);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await this.showTextFullScreen(`Failed to elaborate research.\n\n${message}`, false, '[Tab=back]');
+      await this.showTextFullScreen(`Failed to elaborate research.\n\n${message}`, '[Tab=back]');
       this.ui.view = 'error';
       return;
     }
@@ -1009,7 +1006,6 @@ export class EvenPublisherClient {
     if (!config.openAiApiKey) {
       await this.showTextFullScreen(
         'OpenAI API key missing.\n\nSet the key on the phone screen, then try again.',
-        false,
         'Configuration error'
       );
       return;
@@ -1042,7 +1038,7 @@ export class EvenPublisherClient {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await this.showTextFullScreen(
-        `Failed to apply prompt to research.\n\n${message}`, false, '[Tab=back]'
+        `Failed to apply prompt to research.\n\n${message}`, '[Tab=back]'
       );
       this.ui.view = 'error';
     }
@@ -1067,7 +1063,7 @@ export class EvenPublisherClient {
       setStatus('Published to WordPress and removed from lists.');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await this.showTextFullScreen(`Failed to publish.\n\n${message}`, false, '[Tab=back]');
+        await this.showTextFullScreen(`Failed to publish.\n\n${message}`, '[Tab=back]');
       this.ui.view = 'error';
     }
   }
@@ -1214,8 +1210,7 @@ export class EvenPublisherClient {
     if (!config.elevenLabsApiKey?.trim()) {
       await this.showTextFullScreen(
         `${research.title}\n\n` +
-        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',
-        false,
+        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',  
         '[Tab=back]'
       );
       this.ui.view = 'error';
@@ -1339,8 +1334,7 @@ export class EvenPublisherClient {
     if (!config.elevenLabsApiKey) {
       await this.showTextFullScreen(
         `${research.title}\n\n` +
-        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',
-        false,
+        'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',        
         '[Tab=back]'
       );
       return;
@@ -1351,7 +1345,6 @@ export class EvenPublisherClient {
         this.ui.view = 'prompt-recording';
         await this.showTextFullScreen(
           `${research.title}\n\nListening… `,
-          false,
           '[Tab=stop/start][DTab=back]'
         );
         await startSttRecording(this.bridge);
@@ -1361,7 +1354,6 @@ export class EvenPublisherClient {
         const message = error instanceof Error ? error.message : String(error);
         await this.showTextFullScreen(
           `${research.title}\n\nFailed to start voice prompt.\n\n${message}`,
-          false,
           '[Tab=back]'
         );
       }
@@ -1376,8 +1368,7 @@ export class EvenPublisherClient {
 
       if (!transcript.trim()) {
         await this.showTextFullScreen(
-          `${research.title}\n\nNo speech captured.\n\nSpeak for a bit longer and try again.`,
-          false,
+          `${research.title}\n\nNo speech captured.\n\nSpeak for a bit longer and try again.`,    
           '[Tab=back]'
         );
         return;
@@ -1400,7 +1391,6 @@ export class EvenPublisherClient {
       const message = error instanceof Error ? error.message : String(error);
       await this.showTextFullScreen(
         `${research.title}\n\nFailed to transcribe speech.\n\n${message}`,
-        false,
         '[Tab=back]'
       );
     }
