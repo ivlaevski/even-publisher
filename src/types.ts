@@ -1,14 +1,8 @@
 export type ResearchStatus = 'draft' | 'ready' | 'published';
 
-export type PersonaInfo = {
-  name: string;
-  role?: string;
-};
-
 export type AiNewsItem = {
   title: string;
   description: string;
-  personas: PersonaInfo[] | string[];
   eventDateTime?: string;
   sourceUrl?: string;
   raw: unknown;

@@ -88,8 +88,7 @@ export async function fetchLatestAiNews(
     },
   });
 
-  const prompt = `Find the 5 most recent and discussion-worthy developments about ${topic}.
-Focus on events from the last 30 days.`;
+  const prompt = `Find the 10 most recent and discussion-worthy developments about ${topic}. Focus on events from the last 30 days. Search priority on official website, newsroom, blog, press release pages, official social accounts, reposts and reactions on social media.`;
 
   let data: GeminiDevelopment[] = [];
 
@@ -121,7 +120,6 @@ Focus on events from the last 30 days.`;
     return {
       title: normalizeDashes(rawTitle),
       description: normalizeDashes(snippetToDescription(body, 80)),
-      personas: [] as string[],
       eventDateTime: item.date ? String(item.date) : undefined,
       sourceUrl: item.source_url ? String(item.source_url) : undefined,
       raw: item,
