@@ -258,7 +258,7 @@ export async function publishToWordPress(
 }
 
 /** Default voice for TTS (ElevenLabs) */
-const ELEVENLABS_DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+const ELEVENLABS_DEFAULT_VOICE_ID = 'rWArYo7a2NWuBYf5BE4V';// '21m00Tcm4TlvDq8ikWAM';
 
 /**
  * Synthesize speech from text using ElevenLabs TTS.
@@ -276,6 +276,8 @@ export async function synthesizeSpeech(
     throw new Error('Text to speak is empty');
   }
 
+  appendEventLog(`Synthesizing speech for ${trimmed}`);
+
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}`;
   const res = await fetch(url, {
     method: 'POST',
@@ -292,7 +294,10 @@ export async function synthesizeSpeech(
 
   if (!res.ok) {
     const errText = await res.text();
+    appendEventLog(`ElevenLabs TTS error ${res.status}: ${errText}`);
     throw new Error(`ElevenLabs TTS error ${res.status}: ${errText}`);
+  } else {
+    appendEventLog(`ElevenLabs TTS success`);
   }
 
   return res.arrayBuffer();

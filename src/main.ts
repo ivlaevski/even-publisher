@@ -241,7 +241,8 @@ async function main() {
     }
     try {
       appendEventLog('Connecting to Even bridge…');
-      const bridge = await waitForEvenAppBridge();
+      const bridge = await waitForEvenAppBridge();      
+
       client = new EvenPublisherClient(bridge);
       await client.init();
       setStatus('Connected. Use glasses main menu to start.');

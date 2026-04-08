@@ -30,10 +30,11 @@ import { cancelSttRecording, feedSttAudio, startSttRecording, stopSttAndTranscri
 
 const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
 
-const MAX_CONTENT_LENGTH = 900 - 25;
+const MAX_CONTENT_LENGTH = 900;
+const MAX_CONTENT_LENGTH_TOTAL = 2000;
 
 /** Top-left timer overlay for `showTextFullScreenWithTimer` (must match `textContainerUpgrade` calls). */
-const FULL_SCREEN_TIMER_CONTAINER_ID = 8;
+const FULL_SCREEN_TIMER_CONTAINER_ID = 11;
 
 function formatElapsedMmSs(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -104,6 +105,7 @@ export class EvenPublisherClient {
     await this.ensureStartupUi();
     await this.loadResearches();
     this.ui.topics = loadTopicsFromLocalStorage();
+    await new Promise((r) => setTimeout(r, 3500));
     await this.renderMainMenu();
 
     this.bridge.onEvenHubEvent((raw) => {
@@ -131,7 +133,7 @@ export class EvenPublisherClient {
       }
 
       if (ct === DeviceConnectType.Connected) {
-        //appendEventLog(`[startup] glasses Connected after ${(performance.now() - t0).toFixed(0)}ms`);
+        appendEventLog(`[startup] glasses Connected after ${(performance.now() - t0).toFixed(0)}ms`);
         return;
       }
 
@@ -165,75 +167,6 @@ export class EvenPublisherClient {
     return `raw=${code}`;
   }
 
-  private getMainMenuLayoutData(): RebuildPageContainer {
-    const list = new ListContainerProperty({
-      containerID: 100,
-      containerName: 'app-menu',
-      xPosition: 5,
-      yPosition: 40,
-      width: 560,
-      height: 130,
-      borderWidth: 0,
-      borderColor: 5,
-      borderRadius: 6,
-      paddingLength: 0,
-      isEventCapture: 1,
-      itemContainer: new ListItemContainerProperty({
-        itemCount: 3,
-        itemWidth: 550,
-        isItemSelectBorderEn: 1,
-        itemName: ['Start New Article Research', 'Continue Old Article Research', 'Review Ready for Publishing'],
-      }),
-    });
-
-    return new RebuildPageContainer({
-      containerTotalNum: 4,
-      textObject: [
-        new TextContainerProperty({
-          containerID: 90,
-          containerName: 'menu-title',
-          xPosition: 10,
-          yPosition: 5,
-          width: 300,
-          height: 28,
-          borderWidth: 0,
-          borderColor: 5,
-          paddingLength: 0,
-          content: 'Article Publisher for WordPress',
-          isEventCapture: 0,
-        }),
-        new TextContainerProperty({
-          containerID: 91,
-          containerName: 'menu-subtitle',
-          xPosition: 10,
-          yPosition: 220,
-          width: 300,
-          height: 56,
-          borderWidth: 0,
-          borderColor: 5,
-          paddingLength: 0,
-          content: '© 2026 Ivan Vlaevski  \nLicensed under the MIT License',
-          isEventCapture: 0,
-        }),
-        new TextContainerProperty({
-          containerID: 92,
-          containerName: 'menu-footer',
-          xPosition: 316,
-          yPosition: 248,
-          width: 250,
-          height: 28,
-          content: 'Revolute to @ivanvlaevski',
-          isEventCapture: 0,
-        }),
-      ],
-      listObject: [list],
-    });
-  }
-
-  /** All updates after startup — use `rebuildPageContainer`. */
-  private buildMainMenuRebuildPayload(): RebuildPageContainer {
-    return new RebuildPageContainer(this.getMainMenuLayoutData());
-  }
 
   private async ensureStartupUi(): Promise<void> {
     if (this.isStartupCreated) return;
@@ -249,7 +182,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRadius: 0,
       paddingLength: 2,
-      content: 'Article Publisher for WordPress\n------------------------------------------\nProductivity wherever you go',
+      content: 'Article Publisher for WordPress\n---------------------------\nProductivity wherever you go',
       isEventCapture: 0,
     });
 
@@ -268,23 +201,14 @@ export class EvenPublisherClient {
       isEventCapture: 1,
     });
 
-    const startupPayload = {
+    const container = new CreateStartUpPageContainer({
       containerTotalNum: 2,
       textObject: [title, hint],
-    };
+    });
 
-    const tryCreate = () =>
-      this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(startupPayload));
+    //await new Promise((r) => setTimeout(r, 50));
 
-    await new Promise((r) => setTimeout(r, 50));
-
-    let result = await tryCreate();
-    if (result !== 0) {
-      for (let attempt = 0; attempt < 3 && result !== 0; attempt += 1) {
-        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
-        result = await tryCreate();
-      }
-    }
+    let result = await this.bridge.createStartUpPageContainer(container);
 
     if (result === 0) {
       this.isStartupCreated = true;
@@ -294,15 +218,16 @@ export class EvenPublisherClient {
     appendEventLog(
       `createStartUpPageContainer code=${result}; trying rebuildPageContainer fallback`,
     );
-    const rebuilt = await this.applyRebuildPageContainer(
-      new RebuildPageContainer(startupPayload),
-    );
-    if (rebuilt) {
-      this.isStartupCreated = true;
-      appendEventLog('Startup UI ok via rebuildPageContainer fallback.');
-    } else {
-      appendEventLog(`Failed to create startup page: code=${result}`);
-    }
+
+    // const rebuilt = await this.applyRebuildPageContainer(
+    //   new RebuildPageContainer(container),
+    // );
+    // if (rebuilt) {
+    //   this.isStartupCreated = true;
+    //   appendEventLog('Startup UI ok via rebuildPageContainer fallback.');
+    // } else {
+    //   appendEventLog(`Failed to create startup page: code=${result}`);
+    // }
   }
 
   private buildPages(full: string): string[] {
@@ -380,38 +305,9 @@ export class EvenPublisherClient {
     return text.length > 0 ? text : ' ';
   }
 
-  /**
-   * Full-screen text (576×288) aligned with `TextContainerProperty` / PB `TextContainerProperty`.
-   * Uses `const content = …; return new TextContainerProperty({ …, content })` so JSON gets `Content` reliably.
-   */
-  private createFullScreenTextContainerProperty(args: {
-    containerID: number;
-    containerName: string;
-    text: string;
-    isEventCapture?: number;
-  }): TextContainerProperty {
-    const contentText = this.ensureNonEmptyDisplayText(args.text);
-    return new TextContainerProperty({
-      containerID: args.containerID,
-      containerName: args.containerName,
-      xPosition: 10,
-      yPosition: 32,
-      width: 556,
-      height: 255,
-      borderWidth: 0,
-      borderColor: 5,
-      borderRadius: 0,
-      paddingLength: 0,
-      content: contentText,
-      isEventCapture: args.isEventCapture ?? 1,
-    });
-  }
-
   private async updateResearchDetailPage(research: Research): Promise<void> {
     if (!this.ui.researchPages.length) {
       const header = `${research.title}\n\n`;
-      //const footer =
-      //  '\n\nScroll = Read more\nDouble-tap = Open menu (Prompt / Ready for Publish / Exit)';
       const full = header + research.content; // + footer;
       this.ui.researchPages = this.buildPages(full);
       this.ui.researchPageIndex = clamp(this.ui.researchPageIndex, 0, this.ui.researchPages.length - 1);
@@ -422,20 +318,20 @@ export class EvenPublisherClient {
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
-        containerID: 2,
-        containerName: 'fullscreen-info-text',
+        containerID: 1,
+        containerName: 'finfotext',
         contentOffset: 0,
-        contentLength: MAX_CONTENT_LENGTH,
+        contentLength: MAX_CONTENT_LENGTH_TOTAL,
         content: `[${this.ui.researchPageIndex + 1}/${this.ui.researchPages.length}][Scroll=read more][DTap=menu]`
       }),
     );
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
-        containerID: 400,
-        containerName: 'research-detail',
+        containerID: 2,
+        containerName: 'research',
         contentOffset: 0,
-        contentLength: MAX_CONTENT_LENGTH,
+        contentLength: MAX_CONTENT_LENGTH_TOTAL,
         content: page,
       }),
     );
@@ -490,7 +386,7 @@ export class EvenPublisherClient {
       await this.bridge.textContainerUpgrade(
         new TextContainerUpgrade({
           containerID: FULL_SCREEN_TIMER_CONTAINER_ID,
-          containerName: 'fullscreen-timer',
+          containerName: 'ftimer',
           contentOffset: 0,
           contentLength: 32,
           content: label,
@@ -529,7 +425,7 @@ export class EvenPublisherClient {
     });
     const infoTextOverlay = new TextContainerProperty({
       containerID: 2,
-      containerName: 'fullscreen-info-text',
+      containerName: 'finfotext',
       xPosition: 8,
       yPosition: 0,
       width: 556,
@@ -541,16 +437,17 @@ export class EvenPublisherClient {
       content: infoText,
       isEventCapture: 0,
     });
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 2,
-        textObject: [
-          infoTextOverlay,
-          body,
-        ],
+        textObject: [infoTextOverlay, body]
       }),
     );
-    setStatus(`Text: ${textBody} \n ${infoText}`);
+    if (success) {
+      setStatus(`Text: ${textBody} \n ${infoText}`);
+    } else {
+      appendEventLog(`Failed to show text full screen`);
+    }
   }
 
   /**
@@ -562,7 +459,7 @@ export class EvenPublisherClient {
     const textBody = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
     const timerOverlay = new TextContainerProperty({
       containerID: FULL_SCREEN_TIMER_CONTAINER_ID,
-      containerName: 'fullscreen-timer',
+      containerName: 'ftimer',
       xPosition: 8,
       yPosition: 4,
       width: 86,
@@ -588,22 +485,92 @@ export class EvenPublisherClient {
       content: this.ensureNonEmptyDisplayText(textBody),
       isEventCapture: captureEvents ? 1 : 0,
     });
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 2,
         textObject: [timerOverlay, body],
       }),
     );
-    setStatus(`Text: ${textBody}`);
-    this.startFullScreenTimer();
+    if (success) {
+      setStatus(`Text: ${textBody}`);
+      this.startFullScreenTimer();
+    } else {
+      appendEventLog(`Failed to show text full screen with timer`);
+    }
   }
 
   private async renderMainMenu(): Promise<void> {
-    this.ui.view = 'main-menu';
-    // After the one-time createStartUpPageContainer, only rebuild (SDK).
-    await this.applyRebuildPageContainer(this.buildMainMenuRebuildPayload());
 
-    setStatus('Main menu: tap to choose an option.');
+    const list = new ListContainerProperty({
+      containerID: 9,
+      containerName: 'app-menu',
+      xPosition: 5,
+      yPosition: 40,
+      width: 560,
+      height: 130,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 6,
+      paddingLength: 0,
+      isEventCapture: 1,
+      itemContainer: new ListItemContainerProperty({
+        itemCount: 3,
+        itemWidth: 550,
+        isItemSelectBorderEn: 1,
+        itemName: ['Start New Article Research', 'Continue Old Article Research', 'Review Ready for Publishing'],
+      }),
+    });
+
+    const mainPage = new RebuildPageContainer({
+      containerTotalNum: 4,
+      textObject: [
+        new TextContainerProperty({
+          containerID: 1,
+          containerName: 'menu-title',
+          xPosition: 10,
+          yPosition: 5,
+          width: 300,
+          height: 28,
+          borderWidth: 0,
+          borderColor: 5,
+          paddingLength: 0,
+          content: 'Article Publisher for WordPress',
+          isEventCapture: 0,
+        }),
+        new TextContainerProperty({
+          containerID: 2,
+          containerName: 'menu-subtitle',
+          xPosition: 10,
+          yPosition: 220,
+          width: 300,
+          height: 56,
+          borderWidth: 0,
+          borderColor: 5,
+          paddingLength: 0,
+          content: '© 2026 Ivan Vlaevski  \nLicensed under the MIT License',
+          isEventCapture: 0,
+        }),
+        new TextContainerProperty({
+          containerID: 3,
+          containerName: 'menu-footer',
+          xPosition: 316,
+          yPosition: 248,
+          width: 250,
+          height: 28,
+          content: 'Revolute to @ivanvlaevski',
+          isEventCapture: 0,
+        }),
+      ],
+      listObject: [list],
+    });
+
+    const success = await this.applyRebuildPageContainer(mainPage);
+    if (success) {
+      this.ui.view = 'main-menu';
+      setStatus('Main menu: tap to choose an option.');
+    } else {
+      appendEventLog(`Failed to create main menu`);
+    }
   }
 
   private async renderNewResearchLoading(message: string): Promise<void> {
@@ -629,7 +596,7 @@ export class EvenPublisherClient {
     items.push('<- Back to main menu');
 
     const list = new ListContainerProperty({
-      containerID: 150,
+      containerID: 8,
       containerName: 'topic-select',
       xPosition: 0,
       yPosition: 0,
@@ -681,8 +648,8 @@ export class EvenPublisherClient {
 
       textObjects.push(
         new TextContainerProperty({
-          containerID: 200 + i,
-          containerName: `ai-item-${i}`,
+          containerID: 4 + i,
+          containerName: `aiitem${i}`,
           xPosition: 0,
           yPosition: i * rowHeight,
           width: 576,
@@ -731,16 +698,15 @@ export class EvenPublisherClient {
     setStatus('Detail: tap to select, double-tap to go back to list.');
   }
 
-  private async renderResearchList(): Promise<void> {
-    this.ui.view = 'research-list';
+  private async renderResearchList(): Promise<void> {    
     const drafts = this.getDraftResearches();
 
     const items = drafts.map((r, idx) => `${idx + 1}. ${r.title.slice(0, 60)}`);
     items.push('<- Back');
 
     const list = new ListContainerProperty({
-      containerID: 300,
-      containerName: 'research-list',
+      containerID: 7,
+      containerName: 'researchlist',
       xPosition: 0,
       yPosition: 0,
       width: 576,
@@ -758,29 +724,34 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
       }),
     );
+    if (success) {
+      setStatus('Draft researches: select a research or Back.');
+      this.ui.view = 'research-list';
+    } else {
+      appendEventLog(`Failed to show research list`);
+    }
 
     setStatus('Draft researches: select a research or Back.');
   }
 
   private async renderResearchDetail(research: Research): Promise<void> {
-    this.ui.view = 'research-detail';
+
     this.currentResearchId = research.id;
     const header = `${research.title}\n\n`;
-    const footer = '\n\nDouble-tap for menu';
-    const full = header + research.content + footer;
+    const full = header + research.content;
     this.ui.researchPages = this.buildPages(full);
     this.ui.researchPageIndex = 0;
     const textBody = this.sanitizeForDisplay(this.ui.researchPages[0] ?? '');
 
     const infoTextOverlay = new TextContainerProperty({
-      containerID: 2,
-      containerName: 'fullscreen-info-text',
+      containerID: 1,
+      containerName: 'finfotext',
       xPosition: 8,
       yPosition: 0,
       width: 556,
@@ -793,22 +764,35 @@ export class EvenPublisherClient {
       isEventCapture: 0,
     });
 
-    await this.applyRebuildPageContainer(
+    const contentText = this.ensureNonEmptyDisplayText(textBody);
+    const body = new TextContainerProperty({
+      containerID: 2,
+      containerName: 'research',
+      xPosition: 10,
+      yPosition: 32,
+      width: 556,
+      height: 255,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 0,
+      content: contentText,
+      isEventCapture: 1,
+    });
+
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 2,
-        textObject: [
-          infoTextOverlay,
-          this.createFullScreenTextContainerProperty({
-            containerID: 400,
-            containerName: 'research-detail',
-            text: textBody,
-            isEventCapture: 1,
-          })
-        ],
+        textObject: [infoTextOverlay, body]
       }),
     );
 
-    setStatus('Research: scroll to read, double-tap for menu.');
+    if (success) {
+      setStatus('Research: scroll to read, double-tap for menu.');
+      this.ui.view = 'research-detail';
+    } else {
+      appendEventLog(`Failed to show research detail`);
+    }
   }
 
   private async renderReadyList(): Promise<void> {
@@ -818,8 +802,8 @@ export class EvenPublisherClient {
     items.push('<- Back');
 
     const list = new ListContainerProperty({
-      containerID: 500,
-      containerName: 'ready-list',
+      containerID: 9,
+      containerName: 'readylist',
       xPosition: 0,
       yPosition: 0,
       width: 576,
@@ -860,8 +844,8 @@ export class EvenPublisherClient {
     const textBody = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '');
 
     const infoTextOverlay = new TextContainerProperty({
-      containerID: 2,
-      containerName: 'fullscreen-info-text',
+      containerID: 1,
+      containerName: 'finfotext',
       xPosition: 8,
       yPosition: 0,
       width: 556,
@@ -874,18 +858,26 @@ export class EvenPublisherClient {
       isEventCapture: 0,
     });
 
+    const contentText = this.ensureNonEmptyDisplayText(textBody);
+    const body = new TextContainerProperty({
+      containerID: 2,
+      containerName: 'readydetail',
+      xPosition: 10,
+      yPosition: 32,
+      width: 556,
+      height: 255,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 0,
+      content: contentText,
+      isEventCapture: 1,
+    });
+
     await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 2,
-        textObject: [
-          infoTextOverlay,
-          this.createFullScreenTextContainerProperty({
-            containerID: 600,
-            containerName: 'ready-detail',
-            text: textBody,
-            isEventCapture: 1,
-          }),
-        ],
+        textObject: [infoTextOverlay, body]
       }),
     );
   }
@@ -901,20 +893,20 @@ export class EvenPublisherClient {
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
-        containerID: 2,
-        containerName: 'fullscreen-info-text',
+        containerID: 1,
+        containerName: 'finfotext',
         contentOffset: 0,
-        contentLength: MAX_CONTENT_LENGTH,
+        contentLength: MAX_CONTENT_LENGTH_TOTAL,
         content: `[${this.ui.readyPageIndex + 1}/${this.ui.readyPages.length}][Scroll=read more][DTap=menu]`,
       }),
     );
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
-        containerID: 600,
-        containerName: 'ready-detail',
+        containerID: 2,
+        containerName: 'readydetail',
         contentOffset: 0,
-        contentLength: MAX_CONTENT_LENGTH,
+        contentLength: MAX_CONTENT_LENGTH_TOTAL,
         content: page,
       }),
     );
@@ -1128,8 +1120,8 @@ export class EvenPublisherClient {
     const items = ['Publish now', 'Cancel publishing', 'Back to ready list', 'Back to main menu'];
 
     const list = new ListContainerProperty({
-      containerID: 650,
-      containerName: 'ready-menu',
+      containerID: 9,
+      containerName: 'readymenu',
       xPosition: 0,
       yPosition: 0,
       width: 576,
@@ -1170,8 +1162,8 @@ export class EvenPublisherClient {
     const items = ['Yes', 'No'];
 
     const list = new ListContainerProperty({
-      containerID: isReady ? 751 : 351,
-      containerName: isReady ? 'confirm-cancel-ready' : 'confirm-cancel-research',
+      containerID: isReady ? 9 : 8,
+      containerName: isReady ? 'cancelready' : 'cancelresearch',
       xPosition: 0,
       yPosition: 200,
       width: 576,
@@ -1196,8 +1188,8 @@ export class EvenPublisherClient {
         containerTotalNum: 2,
         textObject: [
           new TextContainerProperty({
-            containerID: isReady ? 750 : 350,
-            containerName: isReady ? 'confirm-cancel-ready-text' : 'confirm-cancel-research-text',
+            containerID: isReady ? 1 : 2,
+            containerName: isReady ? 'cancelrtext' : 'cancelstext',
             xPosition: 0,
             yPosition: 0,
             width: 576,
@@ -1218,7 +1210,6 @@ export class EvenPublisherClient {
   }
 
   private async openResearchMenu(research: Research): Promise<void> {
-    this.ui.view = 'research-menu';
 
     const items = [
       'Read aloud',
@@ -1230,8 +1221,8 @@ export class EvenPublisherClient {
     ];
 
     const list = new ListContainerProperty({
-      containerID: 350,
-      containerName: 'research-menu',
+      containerID: 9,
+      containerName: 'researchmenu',
       xPosition: 0,
       yPosition: 0,
       width: 576,
@@ -1249,14 +1240,19 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
       }),
     );
 
-    setStatus('Research menu: select an action.');
+    if (success) {
+      setStatus('Research menu: select an action.');
+      this.ui.view = 'research-menu';
+    } else {
+      appendEventLog(`Failed to show research menu`);
+    }
   }
 
   private async startReadAloud(research: Research): Promise<void> {
@@ -1297,13 +1293,11 @@ export class EvenPublisherClient {
       return;
     }
 
-    const textBody = this.sanitizeForDisplay(
-      `${line}\n\nTap = pause · Scroll down = next line · Scroll up = replay · Double-tap = back`,
-    );
+    const textBody = this.sanitizeForDisplay(`${line}`);
 
     const infoTextOverlay = new TextContainerProperty({
-      containerID: 2,
-      containerName: 'fullscreen-info-text',
+      containerID: 1,
+      containerName: 'finfotext',
       xPosition: 8,
       yPosition: 0,
       width: 556,
@@ -1316,18 +1310,27 @@ export class EvenPublisherClient {
       isEventCapture: 0,
     });
 
+    const contentText = this.ensureNonEmptyDisplayText(textBody);
+    const body = new TextContainerProperty({
+      containerID: 2,
+      containerName: 'readaloud',
+      xPosition: 10,
+      yPosition: 32,
+      width: 556,
+      height: 255,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 0,
+      content: contentText,
+      isEventCapture: 1,
+    });
+
     await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 2,
         textObject: [
-          infoTextOverlay,
-          this.createFullScreenTextContainerProperty({
-            containerID: 1400 + this.readAloudLineIndex,
-            containerName: 'research-read-aloud',
-            text: textBody,
-            isEventCapture: 1,
-          }),
-        ],
+          infoTextOverlay, body]
       }),
     );
 
@@ -1342,7 +1345,6 @@ export class EvenPublisherClient {
       this.currentReadAloudAudio.currentTime = 0;
       this.currentReadAloudAudio = null;
     }
-    this.ui.view = 'research-detail';
     await this.renderResearchDetail(research);
   }
 
@@ -1352,10 +1354,12 @@ export class EvenPublisherClient {
       synthesizeSpeech(config, line)
         .then((arrayBuffer) => {
           if (this.readAloudAborted) {
+            appendEventLog(`Read aloud aborted`);
             resolve();
             return;
           }
           if (this.currentLineToRead !== line) {
+            appendEventLog(`Read aloud current line changed`);
             resolve();
             return;
           }
@@ -1391,7 +1395,7 @@ export class EvenPublisherClient {
             URL.revokeObjectURL(url);
             this.currentReadAloudAudio = null;
             const msg = err instanceof Error ? err.message : String(err);
-            setStatus(`Read aloud: playback blocked (${msg}). Tap the glasses again to retry.`);
+            setStatus(`Read aloud: playback blocked (${msg}).`);
             reject(err instanceof Error ? err : new Error(msg));
           });
         })
@@ -1469,17 +1473,17 @@ export class EvenPublisherClient {
   /**
    * Glass firmware may use different casing / underscores for text container names.
    */
-  private normalizeContainerName(name: string): string {
-    return name.replace(/_/g, '-').toLowerCase().trim();
-  }
+  // private normalizeContainerName(name: string): string {
+  //   return name.replace(/_/g, '-').toLowerCase().trim();
+  // }
 
-  private textContainerNameMatches(
-    got: string | undefined,
-    expected: string,
-  ): boolean {
-    if (got == null || got === '') return false;
-    return this.normalizeContainerName(got) === this.normalizeContainerName(expected);
-  }
+  // private textContainerNameMatches(
+  //   got: string | undefined,
+  //   expected: string,
+  // ): boolean {
+  //   if (got == null || got === '') return false;
+  //   return this.normalizeContainerName(got) === this.normalizeContainerName(expected);
+  // }
 
   /**
    * `evenHubEventFromJson` can drop `listEvent` when the host uses alternate keys
@@ -1623,10 +1627,10 @@ export class EvenPublisherClient {
       }
     }
 
-    if (this.ui.view === 'research-list' && event.listEvent) {
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+    if (this.ui.view === 'research-list') {
+      if (eventType === OsEventTypeList.CLICK_EVENT) {
         const drafts = this.getDraftResearches();
-        const idx = event.listEvent.currentSelectItemIndex ?? 0;
+        const idx = event.listEvent?.currentSelectItemIndex ?? 0;
         if (idx === drafts.length) {
           await this.renderMainMenu();
         } else {
@@ -1641,11 +1645,8 @@ export class EvenPublisherClient {
     }
 
     // Handle research detail view (also fallback by container name, in case view flag desyncs).
-    if (
-      this.ui.view === 'research-detail' ||
-      (event.textEvent &&
-        this.textContainerNameMatches(event.textEvent.containerName, 'research-detail'))
-    ) {
+    //    this.textContainerNameMatches(event.textEvent.containerName, 'research'))
+    if (this.ui.view === 'research-detail') {
       const drafts = this.getDraftResearches();
       const research = drafts[this.ui.researchSelectedIndex];
       if (!research) {
@@ -1805,12 +1806,11 @@ export class EvenPublisherClient {
         await this.renderReadyList();
         return;
       }
-
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        this.ui.promptDelayDays = clamp(this.ui.promptDelayDays + 1, 0, 10);
-        await this.updateReadyDelayText(research);
-        return;
-      }
+      // if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+      //   //this.ui.promptDelayDays = clamp(this.ui.promptDelayDays + 1, 0, 10);
+      //   await this.updateReadyDelayText(research);
+      //   return;
+      // }
 
       if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
         if (this.ui.readyPageIndex === 0) {
