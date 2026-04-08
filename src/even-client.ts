@@ -26,6 +26,7 @@ import {
   setStatus,
 } from './utils';
 import { elaborateResearch, fetchLatestAiNews, publishToWordPress, refineResearch, synthesizeSpeech } from './api';
+import { prepareSharedPlaybackFromMp3, revokeSharedPlaybackBlobUrl } from './phone-audio';
 import { cancelSttRecording, feedSttAudio, startSttRecording, stopSttAndTranscribe } from './stt-elevenlabs';
 
 const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
@@ -297,12 +298,7 @@ export class EvenPublisherClient {
         result += ch;
       }
     }
-    return result;
-  }
-
-  /** Host PB expects non-empty `Content`; empty string often fails to render. */
-  private ensureNonEmptyDisplayText(text: string): string {
-    return text.length > 0 ? text : ' ';
+    return result.length > 0 ? result : ' ';
   }
 
   private async updateResearchDetailPage(research: Research): Promise<void> {
@@ -314,7 +310,7 @@ export class EvenPublisherClient {
     }
 
     const rawPage = this.ui.researchPages[this.ui.researchPageIndex] ?? '';
-    const page = this.ensureNonEmptyDisplayText(this.sanitizeForDisplay(rawPage));
+    const page = this.sanitizeForDisplay(rawPage);
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
@@ -354,6 +350,11 @@ export class EvenPublisherClient {
   private async saveResearches(): Promise<void> {
     const json = JSON.stringify(this.state.researches);
     await this.bridge.setLocalStorage(STORAGE_KEY_RESEARCHES, json);
+    try {
+      localStorage.setItem(STORAGE_KEY_RESEARCHES, json);
+    } catch {
+      /* storage unavailable */
+    }
   }
 
   private getDraftResearches(): Research[] {
@@ -406,9 +407,8 @@ export class EvenPublisherClient {
   }
 
   private async showTextFullScreen(content: string, infoText?: string): Promise<void> { // captureEvents = true
-    const textBody = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
+    const contentText = this.sanitizeForDisplay(content.slice(0, MAX_CONTENT_LENGTH));
     if (!infoText) { infoText = '...'; }
-    const contentText = this.ensureNonEmptyDisplayText(textBody);
     const body = new TextContainerProperty({
       containerID: 1,
       containerName: 'body',
@@ -444,7 +444,7 @@ export class EvenPublisherClient {
       }),
     );
     if (success) {
-      setStatus(`Text: ${textBody} \n ${infoText}`);
+      setStatus(`Text: ${contentText} \n ${infoText}`);
     } else {
       appendEventLog(`Failed to show text full screen`);
     }
@@ -482,7 +482,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRadius: 0,
       paddingLength: 0,
-      content: this.ensureNonEmptyDisplayText(textBody),
+      content: textBody,
       isEventCapture: captureEvents ? 1 : 0,
     });
     const success = await this.applyRebuildPageContainer(
@@ -698,10 +698,16 @@ export class EvenPublisherClient {
     setStatus('Detail: tap to select, double-tap to go back to list.');
   }
 
-  private async renderResearchList(): Promise<void> {    
+  private async renderResearchList(): Promise<void> {
     const drafts = this.getDraftResearches();
 
-    const items = drafts.map((r, idx) => `${idx + 1}. ${r.title.slice(0, 60)}`);
+    const items = drafts.map((r, idx) => this.sanitizeForDisplay(`${idx + 1}. ${r.title.slice(0, 60)}`));
+
+    if (items.length > 19) {
+      items.splice(19, items.length - 19);
+      appendEventLog(`Research list truncated to 19 items`);
+      setStatus(`Research list truncated to 19 items`);
+    }
     items.push('<- Back');
 
     const list = new ListContainerProperty({
@@ -736,8 +742,6 @@ export class EvenPublisherClient {
     } else {
       appendEventLog(`Failed to show research list`);
     }
-
-    setStatus('Draft researches: select a research or Back.');
   }
 
   private async renderResearchDetail(research: Research): Promise<void> {
@@ -764,7 +768,7 @@ export class EvenPublisherClient {
       isEventCapture: 0,
     });
 
-    const contentText = this.ensureNonEmptyDisplayText(textBody);
+    const contentText = textBody;
     const body = new TextContainerProperty({
       containerID: 2,
       containerName: 'research',
@@ -795,10 +799,14 @@ export class EvenPublisherClient {
     }
   }
 
-  private async renderReadyList(): Promise<void> {
-    this.ui.view = 'ready-list';
+  private async renderReadyList(): Promise<void> {    
     const ready = this.getReadyResearches();
-    const items = ready.map((r, idx) => `${idx + 1}. ${r.title.slice(0, 60)}`);
+    const items = ready.map((r, idx) => `${idx + 1}. ${r.title.slice(0, 50)}`);
+    if (items.length > 19) {
+      items.splice(19, items.length - 19);
+      appendEventLog(`Ready list truncated to 19 items`);
+      setStatus(`Ready list truncated to 19 items`);
+    }
     items.push('<- Back');
 
     const list = new ListContainerProperty({
@@ -821,14 +829,18 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
       }),
     );
-
-    setStatus('Ready for publishing: select a research or Back.');
+    if (success) {
+      setStatus('Ready for publishing: select a research or Back.');
+      this.ui.view = 'ready-list';
+    } else {
+      appendEventLog(`Failed to show ready list`);
+    }
   }
 
   private async renderReadyDetail(research: Research): Promise<void> {
@@ -841,7 +853,7 @@ export class EvenPublisherClient {
     const full = header + research.content; // + footer;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = 0;
-    const textBody = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '');
+    const contentText = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '');
 
     const infoTextOverlay = new TextContainerProperty({
       containerID: 1,
@@ -858,7 +870,6 @@ export class EvenPublisherClient {
       isEventCapture: 0,
     });
 
-    const contentText = this.ensureNonEmptyDisplayText(textBody);
     const body = new TextContainerProperty({
       containerID: 2,
       containerName: 'readydetail',
@@ -889,7 +900,7 @@ export class EvenPublisherClient {
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = clamp(this.ui.readyPageIndex, 0, this.ui.readyPages.length - 1);
     const rawPage = this.ui.readyPages[this.ui.readyPageIndex] ?? '';
-    const page = this.ensureNonEmptyDisplayText(this.sanitizeForDisplay(rawPage));
+    const page = this.sanitizeForDisplay(rawPage);
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
@@ -1025,6 +1036,26 @@ export class EvenPublisherClient {
   public getCurrentResearch(): Research | null {
     if (!this.currentResearchId) return null;
     return this.state.researches.find((r) => r.id === this.currentResearchId) ?? null;
+  }
+
+  /** Phone UI: reload from bridge and return all researches (draft + ready). */
+  public async getResearchesForPhoneUi(): Promise<Research[]> {
+    await this.loadResearches();
+    return this.state.researches.slice();
+  }
+
+  /** Phone UI: remove one research by id (draft or ready). */
+  public async deleteResearchByIdFromPhone(id: string): Promise<boolean> {
+    await this.loadResearches();
+    const idx = this.state.researches.findIndex((r) => r.id === id);
+    if (idx === -1) return false;
+    if (this.currentResearchId === id) {
+      this.currentResearchId = null;
+    }
+    const [removed] = this.state.researches.splice(idx, 1);
+    await this.saveResearches();
+    appendEventLog(`Deleted research from phone: "${removed?.title ?? id}"`);
+    return true;
   }
 
   public async applyPromptToCurrentResearch(prompt: string): Promise<void> {
@@ -1181,7 +1212,7 @@ export class EvenPublisherClient {
       }),
     });
 
-    const questionText = this.ensureNonEmptyDisplayText(this.sanitizeForDisplay(question));
+    const questionText = this.sanitizeForDisplay(question);
 
     await this.applyRebuildPageContainer(
       new RebuildPageContainer({
@@ -1293,7 +1324,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    const textBody = this.sanitizeForDisplay(`${line}`);
+    const contentText = this.sanitizeForDisplay(`${line}`);
 
     const infoTextOverlay = new TextContainerProperty({
       containerID: 1,
@@ -1309,8 +1340,6 @@ export class EvenPublisherClient {
       content: '[Tap=pause][Down=next line][Up=replay][DTap=back]',
       isEventCapture: 0,
     });
-
-    const contentText = this.ensureNonEmptyDisplayText(textBody);
     const body = new TextContainerProperty({
       containerID: 2,
       containerName: 'readaloud',
@@ -1345,6 +1374,7 @@ export class EvenPublisherClient {
       this.currentReadAloudAudio.currentTime = 0;
       this.currentReadAloudAudio = null;
     }
+    revokeSharedPlaybackBlobUrl();
     await this.renderResearchDetail(research);
   }
 
@@ -1363,16 +1393,10 @@ export class EvenPublisherClient {
             resolve();
             return;
           }
-          const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          audio.preload = 'auto';
-          audio.volume = 1;
-          audio.setAttribute('playsinline', 'true');
-          audio.setAttribute('webkit-playsinline', 'true');
+          const audio = prepareSharedPlaybackFromMp3(arrayBuffer);
           this.currentReadAloudAudio = audio;
           audio.onended = () => {
-            URL.revokeObjectURL(url);
+            revokeSharedPlaybackBlobUrl();
             this.currentReadAloudAudio = null;
             if (
               this.readAloudAborted ||
@@ -1386,16 +1410,18 @@ export class EvenPublisherClient {
             resolve();
           };
           audio.onerror = () => {
-            URL.revokeObjectURL(url);
+            revokeSharedPlaybackBlobUrl();
             this.currentReadAloudAudio = null;
             reject(audio.error ?? new Error('Playback failed'));
             setStatus('Read aloud: audio ERROR');
           };
           void audio.play().catch((err) => {
-            URL.revokeObjectURL(url);
+            revokeSharedPlaybackBlobUrl();
             this.currentReadAloudAudio = null;
             const msg = err instanceof Error ? err.message : String(err);
-            setStatus(`Read aloud: playback blocked (${msg}).`);
+            setStatus(
+              `Read aloud: ${msg}\n\nOn the phone, tap “Unlock & test phone speaker” first (iOS/Android autoplay).`,
+            );
             reject(err instanceof Error ? err : new Error(msg));
           });
         })
@@ -1419,11 +1445,11 @@ export class EvenPublisherClient {
         this.ui.view = 'prompt-recording';
         await this.showTextFullScreen(
           `${research.title}\n\nListening… `,
-          '[Tab=stop/start][DTab=back]'
+          '[Tab=stop][DTab=cancel]'
         );
         await startSttRecording(this.bridge);
         this.isVoiceRecording = true;
-        setStatus('Voice prompt: listening… [Tab=stop][DTab=back]');
+        setStatus('Voice prompt: listening…');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         await this.showTextFullScreen(
@@ -1628,7 +1654,7 @@ export class EvenPublisherClient {
     }
 
     if (this.ui.view === 'research-list') {
-      if (eventType === OsEventTypeList.CLICK_EVENT) {
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         const drafts = this.getDraftResearches();
         const idx = event.listEvent?.currentSelectItemIndex ?? 0;
         if (idx === drafts.length) {

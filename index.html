@@ -240,6 +240,68 @@
       #g2-connection-connected[hidden] {
         display: none !important;
       }
+
+      #phone-audio {
+        grid-column: 1 / -1;
+      }
+
+      #audio-device-info {
+        margin-top: 0.5rem;
+        padding: 0.5rem 0.6rem;
+        border-radius: 0.45rem;
+        border: 1px solid #1f2937;
+        background: #020617;
+        font-size: 0.72rem;
+        line-height: 1.35;
+        max-height: 140px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      select:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .research-manage-list {
+        list-style: none;
+        padding: 0;
+        margin: 0.35rem 0 0.25rem;
+        max-height: 200px;
+        overflow-y: auto;
+        border-radius: 0.5rem;
+        border: 1px solid #1f2937;
+        background: #020617;
+      }
+
+      .research-manage-list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.4rem 0.55rem;
+        font-size: 0.8rem;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.8);
+      }
+
+      .research-manage-list li:last-child {
+        border-bottom: none;
+      }
+
+      .research-manage-list .research-item-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .research-manage-list .research-delete {
+        flex-shrink: 0;
+        font-size: 0.72rem;
+        padding: 0.28rem 0.65rem;
+      }
     </style>
   </head>
   <body>
@@ -253,24 +315,7 @@
       </header>
 
       <div class="grid">
-        <section class="card" id="g2-connection">
-          <div id="g2-connection-body">
-            <h2>G2 Connection</h2>
-            <p class="muted">Starts the Even Hub bridge and boots the glasses UI.</p>
-            <div class="btn-row">
-              <button id="connectBtn" class="btn btn-primary">
-                Connect glasses
-              </button>
-            </div>
-            <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #6b7280;">
-              <span class="badge">Tip</span>
-              &nbsp;On the glasses, use tap, double-tap and swipe gestures to navigate menus.
-            </div>
-          </div>
-          <p id="g2-connection-connected" class="muted" hidden style="margin: 0">
-            Bridge connected — use the glasses main menu.
-          </p>
-        </section>
+        <pre id="status">Booting…</pre>               
 
         <section class="card" id="research-refinement">
           <h2>Prompt Research refinement</h2>
@@ -311,6 +356,29 @@
             <button id="topics-delete" class="btn btn-ghost">Delete selected</button>
             <button id="topics-save" class="btn btn-ghost">Save list</button>
           </div>
+        </section>
+
+        <section class="card" id="draft-researches-phone">
+          <div class="ai-settings-header-row">
+            <h2>Draft researches</h2>
+            <button type="button" id="research-lists-refresh" class="btn btn-ghost">Refresh</button>
+          </div>
+          <p class="muted">
+            Drafts appear when you start or continue article research on the glasses. Delete removes the draft from shared
+            storage (same data as “Continue Old Article Research”).
+          </p>
+          <ul id="draft-researches-list" class="research-manage-list"></ul>
+          <p id="draft-researches-empty" class="muted" hidden style="margin: 0.35rem 0 0">No drafts.</p>
+        </section>
+
+        <section class="card" id="ready-researches-phone">
+          <h2>Ready for publishing</h2>
+          <p class="muted">
+            Items marked ready on the glasses. Delete removes them from the queue (same list as “Review Ready for
+            Publishing”).
+          </p>
+          <ul id="ready-researches-list" class="research-manage-list"></ul>
+          <p id="ready-researches-empty" class="muted" hidden style="margin: 0.35rem 0 0">Nothing ready yet.</p>
         </section>
 
         <section class="card" id="ai-settings">
@@ -372,9 +440,66 @@
           </div>
           </div>
         </section>
-      </div>
 
-      <pre id="status">Booting…</pre>
+        <section class="card" id="g2-connection">
+          <div id="g2-connection-body">
+            <h2>G2 Connection</h2>
+            <p class="muted">Starts the Even Hub bridge and boots the glasses UI.</p>
+            <div class="btn-row">
+              <button id="connectBtn" class="btn btn-primary">
+                Connect glasses
+              </button>
+            </div>
+            <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #6b7280;">
+              <span class="badge">Tip</span>
+              &nbsp;On the glasses, use tap, double-tap and swipe gestures to navigate menus.
+            </div>
+          </div>
+          <p id="g2-connection-connected" class="muted" hidden style="margin: 0">
+            Bridge connected — use the glasses main menu.
+          </p>
+        </section> 
+
+        <section class="card" id="phone-audio">
+          <h2>Phone audio (read aloud)</h2>
+          <p class="muted">
+            <strong>Read aloud</strong> plays ElevenLabs MP3 on <strong>this phone</strong> (built-in speaker,
+            wired headset, or Bluetooth). Browsers often block sound until you tap this page.
+            <strong>G2 voice refinement</strong> uses the <strong>glasses microphone</strong> (Even bridge), not the
+            phone mic — input list below is for reference and future use.
+          </p>
+          <div class="btn-row" style="margin-top: 0.75rem">
+            <button type="button" id="audio-unlock-test" class="btn btn-primary">
+              Unlock &amp; test phone speaker
+            </button>
+            <button type="button" id="audio-refresh-devices" class="btn btn-ghost">Refresh device list</button>
+          </div>
+          <p class="muted" style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.78rem">
+            <strong>Required on iPhone / many Android WebViews:</strong> tap <strong>Unlock &amp; test</strong> once on
+            this phone before using <strong>Read aloud</strong> on the glasses. Browsers only allow
+            <code>audio.play()</code> after a user tap; this page reuses one player so later lines work without
+            tapping again.
+          </p>
+
+          <label for="audio-output-select">Playback output (speaker / BT)</label>
+          <select id="audio-output-select" aria-describedby="audio-output-hint"></select>
+          <p id="audio-output-hint" class="muted" style="margin-top: 0.35rem; margin-bottom: 0; font-size: 0.75rem">
+            <span id="audio-sink-support-note"></span>
+            When supported (e.g. Chrome on Android), the next read-aloud clip uses this sink.
+            iOS Safari uses the system route only.
+          </p>
+
+          <label for="audio-input-select">Microphones on this device (informational)</label>
+          <select id="audio-input-select" aria-describedby="audio-input-hint"></select>
+          <p id="audio-input-hint" class="muted" style="margin-top: 0.35rem; margin-bottom: 0; font-size: 0.75rem">
+            Not used for STT in this app (G2 PCM → ElevenLabs). Saved for visibility / future features.
+          </p>
+
+          <p class="muted" style="margin-top: 0.75rem; margin-bottom: 0.25rem; font-size: 0.8rem">Detected devices</p>
+          <div id="audio-device-info">Loading…</div>
+        </section>
+      </div>
+      
       <pre id="event-log"></pre>
     </div>
 

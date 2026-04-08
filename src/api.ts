@@ -276,7 +276,7 @@ export async function synthesizeSpeech(
     throw new Error('Text to speak is empty');
   }
 
-  appendEventLog(`Synthesizing speech for ${trimmed}`);
+  //appendEventLog(`Synthesizing speech for ${trimmed}`);
 
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}`;
   const res = await fetch(url, {
@@ -297,7 +297,7 @@ export async function synthesizeSpeech(
     appendEventLog(`ElevenLabs TTS error ${res.status}: ${errText}`);
     throw new Error(`ElevenLabs TTS error ${res.status}: ${errText}`);
   } else {
-    appendEventLog(`ElevenLabs TTS success`);
+    //appendEventLog(`ElevenLabs TTS success`);
   }
 
   return res.arrayBuffer();

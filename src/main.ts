@@ -1,6 +1,13 @@
 import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk';
 
 import { EvenPublisherClient } from './even-client';
+import type { Research } from './types';
+import {
+  PHONE_AUDIO_INPUT_KEY,
+  PHONE_AUDIO_OUTPUT_KEY,
+  phoneAudioOutputSupportsSink,
+  primeSharedPlaybackAudioFromUserGesture,
+} from './phone-audio';
 import {
   appendEventLog,
   installGlobalErrorLogging,
@@ -9,13 +16,48 @@ import {
   setStatus,
   loadTopicsFromLocalStorage,
   saveTopicsToLocalStorage,
-  withTimeout,
 } from './utils';
 
 let client: EvenPublisherClient | null = null;
 let statusTimer: number | null = null;
 
 const NO_RESEARCH_ON_GLASSES = 'No research selected on glasses.';
+
+const RESEARCHES_STORAGE_KEY = 'even-publisher:researches';
+
+declare global {
+  interface Window {
+    __evenPublisherRefreshResearchLists?: () => void;
+  }
+}
+
+async function loadResearchesForPhoneLists(): Promise<Research[]> {
+  if (client) {
+    return client.getResearchesForPhoneUi();
+  }
+  try {
+    const raw = localStorage.getItem(RESEARCHES_STORAGE_KEY);
+    if (!raw) return [];
+    const value = JSON.parse(raw) as unknown;
+    return Array.isArray(value) ? (value as Research[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function deleteResearchEntryFromPhone(id: string): Promise<void> {
+  if (client) {
+    await client.deleteResearchByIdFromPhone(id);
+    const fn = (window as unknown as { __evenPublisherUpdateResearchStatus?: (c: EvenPublisherClient | null) => void })
+      .__evenPublisherUpdateResearchStatus;
+    fn?.(client);
+    return;
+  }
+  const list = await loadResearchesForPhoneLists();
+  const next = list.filter((r) => r.id !== id);
+  localStorage.setItem(RESEARCHES_STORAGE_KEY, JSON.stringify(next));
+  appendEventLog('Research removed from browser storage only — connect glasses to sync with G2.');
+}
 
 const AI_SETTINGS_INPUT_IDS = [
   'google-generative-key',
@@ -32,6 +74,230 @@ function allAiSettingsFieldsFilled(): boolean {
     const el = document.getElementById(id) as HTMLInputElement | null;
     return el != null && el.value.trim().length > 0;
   });
+}
+
+function bootPhoneAudioUi(): void {
+  const infoEl = document.getElementById('audio-device-info');
+  const outputSel = document.getElementById('audio-output-select') as HTMLSelectElement | null;
+  const inputSel = document.getElementById('audio-input-select') as HTMLSelectElement | null;
+  const unlockBtn = document.getElementById('audio-unlock-test') as HTMLButtonElement | null;
+  const refreshBtn = document.getElementById('audio-refresh-devices') as HTMLButtonElement | null;
+  const sinkNote = document.getElementById('audio-sink-support-note');
+
+  if (!infoEl || !outputSel || !inputSel || !unlockBtn || !refreshBtn) return;
+
+  if (sinkNote) {
+    sinkNote.textContent = phoneAudioOutputSupportsSink()
+      ? 'Output selection is supported here. '
+      : 'Output device picker not supported in this browser — playback uses the system default. ';
+  }
+
+  const refreshAudioDeviceUi = async (): Promise<void> => {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      infoEl.textContent =
+        'navigator.mediaDevices is unavailable in this WebView — cannot list inputs/outputs.';
+      return;
+    }
+
+    let list = await navigator.mediaDevices.enumerateDevices();
+
+    const needLabels = list.some((d) => !d.label);
+    if (needLabels) {
+      infoEl.textContent =
+        'Requesting one-time microphone access so the browser can show device names (phone mic, not G2)…';
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+        list = await navigator.mediaDevices.enumerateDevices();
+      } catch {
+        infoEl.textContent =
+          'Permission denied or unavailable — listing devices without friendly names.';
+      }
+    }
+
+    const lines = list.map(
+      (d) => `${d.kind}: ${d.label || '(no label)'} — ${d.deviceId.slice(0, 16)}…`,
+    );
+    infoEl.textContent = lines.length ? lines.join('\n') : 'No media devices reported.';
+
+    const savedOut = localStorage.getItem(PHONE_AUDIO_OUTPUT_KEY) ?? '';
+    const savedIn = localStorage.getItem(PHONE_AUDIO_INPUT_KEY) ?? '';
+
+    if (phoneAudioOutputSupportsSink()) {
+      outputSel.disabled = false;
+      const outs = list.filter((d) => d.kind === 'audiooutput');
+      outputSel.innerHTML = '<option value="">Default (system routing)</option>';
+      for (const d of outs) {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `Output ${d.deviceId.slice(0, 8)}…`;
+        outputSel.appendChild(opt);
+      }
+      outputSel.value = outs.some((d) => d.deviceId === savedOut) ? savedOut : '';
+    } else {
+      outputSel.disabled = true;
+      outputSel.innerHTML =
+        '<option value="">System default (no setSinkId in this browser)</option>';
+    }
+
+    const ins = list.filter((d) => d.kind === 'audioinput');
+    inputSel.innerHTML =
+      '<option value="">(Informational — G2 uses glasses mic for STT)</option>';
+    for (const d of ins) {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Input ${d.deviceId.slice(0, 8)}…`;
+      inputSel.appendChild(opt);
+    }
+    inputSel.value = ins.some((d) => d.deviceId === savedIn) ? savedIn : '';
+  };
+
+  outputSel.addEventListener('change', () => {
+    const v = outputSel.value.trim();
+    if (v) localStorage.setItem(PHONE_AUDIO_OUTPUT_KEY, v);
+    else localStorage.removeItem(PHONE_AUDIO_OUTPUT_KEY);
+    appendEventLog(`Phone audio: playback output ${v ? 'set' : 'cleared (system default)'}.`);
+  });
+
+  inputSel.addEventListener('change', () => {
+    const v = inputSel.value.trim();
+    if (v) localStorage.setItem(PHONE_AUDIO_INPUT_KEY, v);
+    else localStorage.removeItem(PHONE_AUDIO_INPUT_KEY);
+    appendEventLog(`Phone audio: stored mic selection (informational).`);
+  });
+
+  unlockBtn.addEventListener('click', async () => {
+    try {
+      const htmlOk = await primeSharedPlaybackAudioFromUserGesture();
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AC) {
+        const ctx = new AC();
+        await ctx.resume();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = 0.07;
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.12);
+      }
+      if (htmlOk) {
+        setStatus(
+          'Phone audio: unlock OK — read aloud uses this same speaker path (tap here again if playback stops working).',
+        );
+        appendEventLog('Phone audio: HTMLAudioElement + Web Audio unlock OK.');
+      } else {
+        setStatus(
+          'Phone audio: Web Audio OK, but HTMLAudioElement silent clip was blocked — try again or check browser permissions.',
+        );
+        appendEventLog('Phone audio: HTMLAudioElement prime failed (read aloud may still block).');
+      }
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      setStatus(`Phone audio test: ${m}`);
+      appendEventLog(`Phone audio test failed: ${m}`);
+    }
+  });
+
+  refreshBtn.addEventListener('click', () => {
+    void refreshAudioDeviceUi();
+  });
+
+  if (navigator.mediaDevices?.addEventListener) {
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+      void refreshAudioDeviceUi();
+    });
+  }
+
+  void refreshAudioDeviceUi();
+}
+
+function bootResearchPhoneLists(): void {
+  const draftUl = document.getElementById('draft-researches-list');
+  const readyUl = document.getElementById('ready-researches-list');
+  const draftEmpty = document.getElementById('draft-researches-empty');
+  const readyEmpty = document.getElementById('ready-researches-empty');
+  const refreshBtn = document.getElementById('research-lists-refresh');
+
+  if (!draftUl || !readyUl) return;
+
+  const render = async (): Promise<void> => {
+    const all = await loadResearchesForPhoneLists();
+    const drafts = all.filter((r) => r.status === 'draft');
+    const ready = all.filter((r) => r.status === 'ready');
+
+    draftUl.innerHTML = '';
+    for (const r of drafts) {
+      const li = document.createElement('li');
+      const title = document.createElement('span');
+      title.className = 'research-item-title';
+      title.title = r.title;
+      title.textContent = r.title || '(untitled)';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn btn-ghost research-delete';
+      del.dataset.researchId = r.id;
+      del.textContent = 'Delete';
+      li.append(title, del);
+      draftUl.appendChild(li);
+    }
+    if (draftEmpty) draftEmpty.hidden = drafts.length > 0;
+
+    readyUl.innerHTML = '';
+    for (const r of ready) {
+      const li = document.createElement('li');
+      const title = document.createElement('span');
+      title.className = 'research-item-title';
+      title.title = r.title;
+      title.textContent = r.title || '(untitled)';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn btn-ghost research-delete';
+      del.dataset.researchId = r.id;
+      del.textContent = 'Delete';
+      li.append(title, del);
+      readyUl.appendChild(li);
+    }
+    if (readyEmpty) readyEmpty.hidden = ready.length > 0;
+  };
+
+  const wireDelete = (ul: HTMLElement, message: string): void => {
+    ul.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const btn = target.closest('button[data-research-id]') as HTMLButtonElement | null;
+      if (!btn || !ul.contains(btn)) return;
+      const id = btn.dataset.researchId;
+      if (!id) return;
+      if (!window.confirm(message)) return;
+      void deleteResearchEntryFromPhone(id)
+        .then(() => render())
+        .catch((err) => {
+          const m = err instanceof Error ? err.message : String(err);
+          appendEventLog(`Delete research failed: ${m}`);
+          setStatus(`Delete failed: ${m}`);
+        });
+    });
+  };
+
+  wireDelete(draftUl, 'Delete this draft? It will be removed from the glasses list too when synced.');
+  wireDelete(
+    readyUl,
+    'Remove this ready item? It will be removed from the publishing queue when synced.',
+  );
+
+  refreshBtn?.addEventListener('click', () => {
+    void render();
+  });
+
+  window.__evenPublisherRefreshResearchLists = () => {
+    void render();
+  };
+
+  void render();
 }
 
 function bootSettingsUi(): void {
@@ -230,6 +496,8 @@ async function main() {
   setStatus('Waiting for Even bridge…');
 
   bootSettingsUi();
+  bootPhoneAudioUi();
+  bootResearchPhoneLists();
   //appendEventLog('[main] bootSettingsUi ok');
 
   const connectBtn = document.getElementById('connectBtn') as HTMLButtonElement | null;
@@ -262,6 +530,7 @@ async function main() {
           updateStatusFn(client);
         }, 3000);
       }
+      window.__evenPublisherRefreshResearchLists?.();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(`Bridge not available: ${message}\n\nRunning in browser-only mode.`);
