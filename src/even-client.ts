@@ -1558,22 +1558,45 @@ export class EvenPublisherClient {
       }
     }
 
+    let audioEvent = parsed.audioEvent;
+    if (!audioEvent?.audioPcm) {
+      const rawAudio = r.audioEvent ?? r.audio_event ?? jd?.audioEvent ?? jd?.audio_event;
+      if (rawAudio != null && typeof rawAudio === 'object') {
+        const ra = rawAudio as Record<string, unknown>;
+        const nestedPcm = ra.audioPcm ?? ra.audio_pcm;
+        if (nestedPcm != null) {
+          audioEvent = {
+            ...audioEvent,
+            audioPcm: nestedPcm as NonNullable<EvenHubEvent['audioEvent']>['audioPcm'],
+          };
+        } else {
+          audioEvent = rawAudio as EvenHubEvent['audioEvent'];
+        }
+      }
+    }
+    if (!audioEvent?.audioPcm) {
+      const loosePcm = r.audioPcm ?? r.audio_pcm ?? jd?.audioPcm ?? jd?.audio_pcm;
+      if (loosePcm != null) {
+        audioEvent = {
+          ...audioEvent,
+          audioPcm: loosePcm as NonNullable<EvenHubEvent['audioEvent']>['audioPcm'],
+        };
+      }
+    }
+
     return {
       ...parsed,
       listEvent,
       textEvent,
       sysEvent,
+      audioEvent,
     };
   }
 
   private async onEvenHubEvent(event: EvenHubEvent): Promise<void> {
-    if (event.audioEvent?.audioPcm) {
-      const pcm = event.audioEvent?.audioPcm as Uint8Array | number[] | undefined;
-      if (pcm instanceof Uint8Array) {
-        if (pcm.byteLength > 0) feedSttAudio(pcm);
-      } else if (Array.isArray(pcm) && pcm.length > 0) {
-        feedSttAudio(pcm);
-      }
+    const hubPcm = event.audioEvent?.audioPcm as Uint8Array | number[] | string | undefined;
+    if (hubPcm != null && hubPcm !== '') {
+      feedSttAudio(hubPcm);
     }
 
     // Do not return after audio: the host may attach audio alongside list events, or send

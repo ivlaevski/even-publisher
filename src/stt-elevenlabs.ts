@@ -47,10 +47,11 @@ export async function startSttRecording(bridge: EvenAppBridge): Promise<void> {
 }
 
 /**
- * PCM from G2: 16 kHz, signed 16-bit little-endian, mono (2 bytes/sample).
+ * PCM from G2 / phone bridge: 16 kHz, signed 16-bit little-endian, mono (2 bytes/sample).
+ * Host JSON often sends `audioPcm` as number[] or base64 string (per SDK); we normalize here.
  * Chunks are buffered and wrapped as WAV in `stopSttAndTranscribe` for ElevenLabs.
  */
-export function feedSttAudio(pcmData: Uint8Array | number[]): void {
+export function feedSttAudio(pcmData: Uint8Array | number[] | string): void {
   if (!state.isListening) return;
   const chunk = normalizePcmChunk(pcmData);
   if (chunk.length === 0) return;
@@ -58,9 +59,27 @@ export function feedSttAudio(pcmData: Uint8Array | number[]): void {
   state.totalBytes += chunk.length;
 }
 
-function normalizePcmChunk(pcmData: Uint8Array | number[]): Uint8Array {
+function normalizePcmChunk(pcmData: Uint8Array | number[] | string): Uint8Array {
   if (pcmData instanceof Uint8Array) return new Uint8Array(pcmData);
   if (Array.isArray(pcmData)) return new Uint8Array(pcmData);
+  if (typeof pcmData === 'string') {
+    let s = pcmData.trim();
+    if (!s) return new Uint8Array();
+    const comma = s.indexOf(',');
+    if (s.startsWith('data:') && comma !== -1) {
+      s = s.slice(comma + 1).trim();
+    }
+    try {
+      const binary = atob(s);
+      const out = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        out[i] = binary.charCodeAt(i);
+      }
+      return out;
+    } catch {
+      return new Uint8Array();
+    }
+  }
   return new Uint8Array();
 }
 
