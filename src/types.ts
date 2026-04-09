@@ -44,6 +44,7 @@ export type ViewName =
   | 'research-menu'
   | 'confirm-cancel-research'
   | 'research-read-aloud'
+  | 'research-read-aloud-unlock-hint'
   | 'ready-list'
   | 'ready-detail'
   | 'ready-menu'

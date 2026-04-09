@@ -13,6 +13,19 @@ const ELEVEN_STT_URL = 'https://api.elevenlabs.io/v1/speech-to-text';
 const SAMPLE_RATE = 16000;
 const MIN_AUDIO_BYTES = 3200;
 
+export type SttLivePayload = {
+  /** Estimated length of buffered PCM at 16 kHz mono 16-bit LE. */
+  approxDurationMs: number;
+  totalBytes: number;
+};
+
+let liveListener: ((payload: SttLivePayload) => void) | null = null;
+
+/** Fires after each non-empty PCM chunk while recording (throttle updates in the UI). */
+export function setSttLiveListener(fn: ((payload: SttLivePayload) => void) | null): void {
+  liveListener = fn;
+}
+
 let state: SttState = {
   isListening: false,
   audioBuffer: [],
@@ -57,6 +70,12 @@ export function feedSttAudio(pcmData: Uint8Array | number[] | string): void {
   if (chunk.length === 0) return;
   state.audioBuffer.push(chunk);
   state.totalBytes += chunk.length;
+  if (liveListener) {
+    liveListener({
+      approxDurationMs: Math.round((state.totalBytes / 2 / SAMPLE_RATE) * 1000),
+      totalBytes: state.totalBytes,
+    });
+  }
 }
 
 function normalizePcmChunk(pcmData: Uint8Array | number[] | string): Uint8Array {
@@ -111,9 +130,9 @@ export async function stopSttAndTranscribe(apiKey: string): Promise<string> {
   state.totalBytes = 0;
 
   const durationMs = Math.round((pcmByteLength / 2 / SAMPLE_RATE) * 1000);
-  appendEventLog(
-    `[STT] Sending audio for transcription: ${pcmByteLength} bytes PCM (~${durationMs} ms at ${SAMPLE_RATE} Hz, 16-bit LE mono) → ElevenLabs scribe_v2`,
-  );
+  // appendEventLog(
+  //   `[STT] Sending audio for transcription: ${pcmByteLength} bytes PCM (~${durationMs} ms at ${SAMPLE_RATE} Hz, 16-bit LE mono) → ElevenLabs scribe_v2`,
+  // );
 
   const formData = new FormData();
   formData.append('file', wavBlob, 'audio.wav');
@@ -136,9 +155,9 @@ export async function stopSttAndTranscribe(apiKey: string): Promise<string> {
   const json = (await response.json()) as any;
   const text = typeof json.text === 'string' ? json.text.trim() : '';
   const preview = text.length <= 120 ? text : `${text.slice(0, 117)}…`;
-  appendEventLog(
-    `[STT] Transcription returned: ${text.length} character(s)${text ? ` — "${preview}"` : ' (empty)'}`,
-  );
+  // appendEventLog(
+  //   `[STT] Transcription returned: ${text.length} character(s)${text ? ` — "${preview}"` : ' (empty)'}`,
+  // );
   return text;
 }
 

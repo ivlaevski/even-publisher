@@ -26,16 +26,54 @@ import {
   setStatus,
 } from './utils';
 import { elaborateResearch, fetchLatestAiNews, publishToWordPress, refineResearch, synthesizeSpeech } from './api';
-import { prepareSharedPlaybackFromMp3, revokeSharedPlaybackBlobUrl } from './phone-audio';
-import { cancelSttRecording, feedSttAudio, startSttRecording, stopSttAndTranscribe } from './stt-elevenlabs';
+import {
+  hasPhonePlaybackPrimedThisSession,
+  prepareSharedPlaybackFromMp3,
+  revokeSharedPlaybackBlobUrl,
+} from './phone-audio';
+import {
+  cancelSttRecording,
+  feedSttAudio,
+  setSttLiveListener,
+  startSttRecording,
+  stopSttAndTranscribe,
+  type SttLivePayload,
+} from './stt-elevenlabs';
 
 const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
 
 const MAX_CONTENT_LENGTH = 900;
 const MAX_CONTENT_LENGTH_TOTAL = 2000;
 
+/** Minimal typings for optional browser Speech Recognition (not always in TS `lib`). */
+type VoiceSpeechRecognitionResult = {
+  readonly isFinal: boolean;
+  readonly 0: { readonly transcript: string };
+};
+
+type VoiceSpeechRecognitionEvent = {
+  readonly resultIndex: number;
+  readonly results: ArrayLike<VoiceSpeechRecognitionResult> & { length: number };
+};
+
+type VoiceSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((ev: VoiceSpeechRecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort?: () => void;
+};
+
 /** Top-left timer overlay for `showTextFullScreenWithTimer` (must match `textContainerUpgrade` calls). */
 const FULL_SCREEN_TIMER_CONTAINER_ID = 11;
+
+/** Voice prompt recording full screen — IDs/names must match `textContainerUpgrade` calls. */
+const VOICE_PROMPT_INFO_CONTAINER_ID = 2;
+const VOICE_PROMPT_CONTEXT_CONTAINER_ID = 12;
+const VOICE_PROMPT_TRANSCRIPT_CONTAINER_ID = 13;
 
 function formatElapsedMmSs(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -96,6 +134,12 @@ export class EvenPublisherClient {
   /** Cleared whenever the glasses page is rebuilt so upgrades never hit a stale container. */
   private fullScreenTimerInterval: ReturnType<typeof setInterval> | null = null;
   private fullScreenTimerStartedAtMs: number | null = null;
+
+  private voicePromptDurationLine = '';
+  private voicePromptInterimFromSr = '';
+  private voicePromptSrCommitted = '';
+  private voicePromptSpeechRec: VoiceSpeechRecognition | null = null;
+  private voicePromptTranscriptFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
@@ -286,19 +330,22 @@ export class EvenPublisherClient {
     return result;
   }
 
-  private sanitizeForDisplay(text: string): string {
+  private sanitizeForDisplay(text: string, maxLength: number = MAX_CONTENT_LENGTH_TOTAL): string {
     if (!text) return '';
-    let result = '';
-    for (const ch of text) {
-      const code = ch.codePointAt(0);
-      if (code !== undefined && code > 0xffff) {
-        const hex = code.toString(16).toUpperCase().padStart(4, '0');
-        result += `[ U+${hex} ]`;
-      } else {
-        result += ch;
-      }
-    }
-    return result.length > 0 ? result : ' ';
+    text = text.slice(0, maxLength);
+    return text;
+    // let result = '';
+    // for (const ch of text) {
+    //   const code = ch.codePointAt(0);
+    //   if (code !== undefined && code > 0xffff) {
+    //     const hex = code.toString(16).toUpperCase().padStart(4, '0');
+    //     appendEventLog(`Unsupported character: U+${hex} (${ch})`);
+    //     result += `*`;
+    //   } else {
+    //     result += ch;
+    //   }
+    // }
+    // return result.length > 0 ? result.slice(0, maxLength) : ' ';
   }
 
   private async updateResearchDetailPage(research: Research): Promise<void> {
@@ -499,6 +546,223 @@ export class EvenPublisherClient {
     }
   }
 
+  /** Tear down live transcript listeners, speech recognition, debounce timer, and recording timer. */
+  private clearVoicePromptRecordingUi(): void {
+    this.stopFullScreenTimer();
+    if (this.voicePromptTranscriptFlushTimer != null) {
+      window.clearTimeout(this.voicePromptTranscriptFlushTimer);
+      this.voicePromptTranscriptFlushTimer = null;
+    }
+    setSttLiveListener(null);
+    this.stopVoicePromptInterimSpeechRecognition();
+    this.voicePromptDurationLine = '';
+  }
+
+  private stopVoicePromptInterimSpeechRecognition(): void {
+    if (this.voicePromptSpeechRec) {
+      try {
+        this.voicePromptSpeechRec.stop();
+      } catch {
+        try {
+          this.voicePromptSpeechRec.abort?.();
+        } catch {
+          /* ignore */
+        }
+      }
+      this.voicePromptSpeechRec = null;
+    }
+    this.voicePromptSrCommitted = '';
+    this.voicePromptInterimFromSr = '';
+  }
+
+  /**
+   * Best-effort browser speech recognition for interim captions (may be unavailable in embedded WebViews).
+   * Final transcription still comes from ElevenLabs after stop.
+   */
+  private startVoicePromptInterimSpeechRecognition(): void {
+    this.stopVoicePromptInterimSpeechRecognition();
+    const g = globalThis as unknown as {
+      SpeechRecognition?: new () => VoiceSpeechRecognition;
+      webkitSpeechRecognition?: new () => VoiceSpeechRecognition;
+    };
+    const SR = g.SpeechRecognition ?? g.webkitSpeechRecognition;
+    if (!SR) {
+      appendEventLog('No speech recognition API found');
+      this.voicePromptInterimFromSr = 'Speech recognition API not found';
+      return;
+    }
+
+    const r = new SR();
+    r.continuous = true;
+    r.interimResults = true;
+    r.lang = typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en-US';
+    r.onresult = (ev: VoiceSpeechRecognitionEvent) => {
+      for (let i = ev.resultIndex; i < ev.results.length; i += 1) {
+        const result = ev.results[i];
+        const piece = result[0]?.transcript ?? '';
+        if (result.isFinal) {
+          this.voicePromptSrCommitted += piece;
+        }
+      }
+      let interim = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i += 1) {
+        const result = ev.results[i];
+        if (!result.isFinal) {
+          interim += result[0]?.transcript ?? '';
+        }
+      }
+      this.voicePromptInterimFromSr = `${this.voicePromptSrCommitted} ${interim}`.trim();
+      this.scheduleVoicePromptTranscriptRefresh();
+    };
+    r.onerror = () => {
+      /* missing mic / not allowed — ElevenLabs path still works */
+    };
+    try {
+      r.start();
+      this.voicePromptSpeechRec = r;
+    } catch {
+      this.voicePromptSpeechRec = null;
+    }
+  }
+
+  private onVoicePromptSttLive(payload: SttLivePayload): void {
+    if (payload.totalBytes <= 0) {
+      this.voicePromptDurationLine = '';
+    } else if (payload.totalBytes < 3200) {
+      this.voicePromptDurationLine = 'Receiving audio…';
+    } else {
+      const sec = (payload.approxDurationMs / 1000).toFixed(1);
+      this.voicePromptDurationLine = `~${sec}s buffered`;
+    }
+    this.scheduleVoicePromptTranscriptRefresh();
+  }
+
+  private scheduleVoicePromptTranscriptRefresh(): void {
+    if (this.ui.view !== 'prompt-recording') return;
+    if (this.voicePromptTranscriptFlushTimer != null) return;
+    this.voicePromptTranscriptFlushTimer = window.setTimeout(() => {
+      this.voicePromptTranscriptFlushTimer = null;
+      void this.refreshVoicePromptTranscriptPanel();
+    }, 320);
+  }
+
+  private composeVoicePromptTranscriptDisplay(): string {
+    const lines: string[] = [];
+    if (this.voicePromptInterimFromSr) {
+      lines.push(this.voicePromptInterimFromSr);
+    }
+    if (this.voicePromptDurationLine) {
+      lines.push(this.voicePromptDurationLine);
+    }
+    if (lines.length === 0) {
+      return 'Interim transcript (when the browser supports it) and audio level appear here while you speak.';
+    }
+    return lines.join('\n\n');
+  }
+
+  private async refreshVoicePromptTranscriptPanel(): Promise<void> {
+    if (this.ui.view !== 'prompt-recording') return;
+    const text = this.sanitizeForDisplay(this.composeVoicePromptTranscriptDisplay(), MAX_CONTENT_LENGTH);
+    try {
+      await this.bridge.textContainerUpgrade(
+        new TextContainerUpgrade({
+          containerID: VOICE_PROMPT_TRANSCRIPT_CONTAINER_ID,
+          containerName: 'vprompt-tr',
+          contentOffset: 0,
+          contentLength: MAX_CONTENT_LENGTH_TOTAL,
+          content: text,
+        }),
+      );
+    } catch {
+      /* view replaced */
+    }
+  }
+
+  /**
+   * Voice prompt: hints + elapsed time + static context (title) + live-updating transcript panel.
+   */
+  private async showVoicePromptRecordingScreen(research: Research): Promise<void> {
+    this.voicePromptDurationLine = '';
+    this.voicePromptSrCommitted = '';
+    this.voicePromptInterimFromSr = '';
+    if (this.voicePromptTranscriptFlushTimer != null) {
+      window.clearTimeout(this.voicePromptTranscriptFlushTimer);
+      this.voicePromptTranscriptFlushTimer = null;
+    }
+
+    const title = this.sanitizeForDisplay(research.title,220);    
+
+    const infoTextOverlay = new TextContainerProperty({
+      containerID: VOICE_PROMPT_INFO_CONTAINER_ID,
+      containerName: 'finfotext',
+      xPosition: 8,
+      yPosition: 0,
+      width: 420,
+      height: 32,
+      borderWidth: 1,
+      borderColor: 5,
+      borderRadius: 2,
+      paddingLength: 1,
+      content: '[Tab=stop][DTab=cancel]',
+      isEventCapture: 0,
+    });
+    const timerOverlay = new TextContainerProperty({
+      containerID: FULL_SCREEN_TIMER_CONTAINER_ID,
+      containerName: 'ftimer',
+      xPosition: 432,
+      yPosition: 0,
+      width: 132,
+      height: 32,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 0,
+      content: formatElapsedMmSs(0),
+      isEventCapture: 0,
+    });
+    const contextBlock = new TextContainerProperty({
+      containerID: VOICE_PROMPT_CONTEXT_CONTAINER_ID,
+      containerName: 'vprompt-ctx',
+      xPosition: 10,
+      yPosition: 35,
+      width: 556,
+      height: 80,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 0,
+      content: this.sanitizeForDisplay(title,MAX_CONTENT_LENGTH),
+      isEventCapture: 0,
+    });
+    const transcriptBlock = new TextContainerProperty({
+      containerID: VOICE_PROMPT_TRANSCRIPT_CONTAINER_ID,
+      containerName: 'vprompt-tr',
+      xPosition: 10,
+      yPosition: 115,
+      width: 556,
+      height: 173,
+      borderWidth: 0,
+      borderColor: 5,
+      borderRadius: 0,
+      paddingLength: 0,
+      content: this.sanitizeForDisplay(this.composeVoicePromptTranscriptDisplay(), MAX_CONTENT_LENGTH),
+      isEventCapture: 1,
+    });
+
+    const success = await this.applyRebuildPageContainer(
+      new RebuildPageContainer({
+        containerTotalNum: 4,
+        textObject: [infoTextOverlay, timerOverlay, contextBlock, transcriptBlock],
+      }),
+    );
+    if (success) {
+      setStatus(`Voice prompt: ${research.title.slice(0, 80)}…`);
+      this.startFullScreenTimer();
+    } else {
+      appendEventLog('Failed to show voice prompt recording screen');
+    }
+  }
+
   private async renderMainMenu(): Promise<void> {
 
     const list = new ListContainerProperty({
@@ -692,7 +956,7 @@ export class EvenPublisherClient {
     //lines.push('Tap = Select and create research');
     //lines.push('Double-tap = Back to list');
 
-    const content = this.sanitizeForDisplay(lines.join('\n'));
+    const content = this.sanitizeForDisplay(lines.join('\n'), MAX_CONTENT_LENGTH);
     await this.showTextFullScreen(content, '[Tab=select][DTab=back]');
 
     setStatus('Detail: tap to select, double-tap to go back to list.');
@@ -701,7 +965,7 @@ export class EvenPublisherClient {
   private async renderResearchList(): Promise<void> {
     const drafts = this.getDraftResearches();
 
-    const items = drafts.map((r, idx) => this.sanitizeForDisplay(`${idx + 1}. ${r.title.slice(0, 60)}`));
+    const items = drafts.map((r, idx) => this.sanitizeForDisplay(`${idx + 1}. ${r.title.slice(0, 60)}`,64));
 
     if (items.length > 19) {
       items.splice(19, items.length - 19);
@@ -751,7 +1015,7 @@ export class EvenPublisherClient {
     const full = header + research.content;
     this.ui.researchPages = this.buildPages(full);
     this.ui.researchPageIndex = 0;
-    const textBody = this.sanitizeForDisplay(this.ui.researchPages[0] ?? '');
+    const textBody = this.sanitizeForDisplay(this.ui.researchPages[0] ?? '', MAX_CONTENT_LENGTH);
 
     const infoTextOverlay = new TextContainerProperty({
       containerID: 1,
@@ -853,7 +1117,7 @@ export class EvenPublisherClient {
     const full = header + research.content; // + footer;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = 0;
-    const contentText = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '');
+    const contentText = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '', MAX_CONTENT_LENGTH);
 
     const infoTextOverlay = new TextContainerProperty({
       containerID: 1,
@@ -1243,8 +1507,8 @@ export class EvenPublisherClient {
   private async openResearchMenu(research: Research): Promise<void> {
 
     const items = [
-      'Read aloud',
-      'Start / stop voice prompt (record)',
+      'Read aloud (Unlock & test phone speaker first)',
+      'Record Voice Prompt to refine research',
       'Mark as Ready for Publish',
       'Cancel research',
       'Back to draft list',
@@ -1443,14 +1707,14 @@ export class EvenPublisherClient {
     if (!this.isVoiceRecording) {
       try {
         this.ui.view = 'prompt-recording';
-        await this.showTextFullScreen(
-          `${research.title}\n\nListening… `,
-          '[Tab=stop][DTab=cancel]'
-        );
+        await this.showVoicePromptRecordingScreen(research);
+        setSttLiveListener((p) => this.onVoicePromptSttLive(p));
+        this.startVoicePromptInterimSpeechRecognition();
         await startSttRecording(this.bridge);
         this.isVoiceRecording = true;
         setStatus('Voice prompt: listening…');
       } catch (error) {
+        this.clearVoicePromptRecordingUi();
         const message = error instanceof Error ? error.message : String(error);
         await this.showTextFullScreen(
           `${research.title}\n\nFailed to start voice prompt.\n\n${message}`,
@@ -1461,6 +1725,7 @@ export class EvenPublisherClient {
     }
 
     try {
+      this.clearVoicePromptRecordingUi();
       const transcript = await stopSttAndTranscribe(config.elevenLabsApiKey);
       this.isVoiceRecording = false;
 
@@ -1480,12 +1745,14 @@ export class EvenPublisherClient {
         // ignore storage errors
       }
 
-      await this.showTextFullScreen(
-        `${research.title}\n\n` +
-        'Transcribed request:\n\n' +
-        `${transcript}\n\n` +
-        'You can now use this text to refine the draft on the phone.',
-      );
+      await this.applyPromptToCurrentResearch(transcript);
+
+      // await this.showTextFullScreen(
+      //   `${research.title}\n\n` +
+      //   'Transcribed request:\n\n' +
+      //   `${transcript}\n\n` +
+      //   'You can now use this text to refine the draft on the phone.',
+      // );
     } catch (error) {
       this.isVoiceRecording = false;
       const message = error instanceof Error ? error.message : String(error);
@@ -1736,6 +2003,14 @@ export class EvenPublisherClient {
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         const idx = event.listEvent.currentSelectItemIndex ?? 0;
         if (idx === 0) {
+          if (!hasPhonePlaybackPrimedThisSession()) {
+            this.ui.view = 'research-read-aloud-unlock-hint';
+            await this.showTextFullScreen(
+              "Please, open your phone and click once on button 'Unlock & test phone speaker first' to enable audio.",
+              '[Tab=back]',
+            );
+            return;
+          }
           await this.startReadAloud(research);
         } else if (idx === 1) {
           await this.toggleVoicePromptRecording(research);
@@ -1763,8 +2038,12 @@ export class EvenPublisherClient {
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         if (this.currentReadAloudAudio) {
           if (this.currentReadAloudAudio.paused) {
-            this.currentReadAloudAudio.play();
             setStatus('Read aloud resumed. Tap to pause or double-tap to exit.');
+            this.currentReadAloudAudio.play().catch((err) => {
+              setStatus(
+                `Read aloud: ${err instanceof Error ? err.message : String(err)}\n\nOn the phone, tap “Unlock & test phone speaker” first (iOS/Android autoplay).`,
+              );
+            });
           } else {
             this.currentReadAloudAudio.pause();
             setStatus('Read aloud paused. Tap to continue or double-tap to exit.');
@@ -1815,6 +2094,7 @@ export class EvenPublisherClient {
       if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
         if (this.isVoiceRecording) {
           await this.toggleVoicePromptRecording(research);
+          return;
         }
         await this.renderResearchDetail(research);
         return;
@@ -1824,6 +2104,7 @@ export class EvenPublisherClient {
         if (this.isVoiceRecording) {
           await cancelSttRecording();
           this.isVoiceRecording = false;
+          this.clearVoicePromptRecordingUi();
         }
         await this.renderResearchDetail(research);
         return;
@@ -1938,6 +2219,19 @@ export class EvenPublisherClient {
         }
         return;
       }
+    }
+
+    if (this.ui.view === 'research-read-aloud-unlock-hint') {
+      const drafts = this.getDraftResearches();
+      const research = drafts[this.ui.researchSelectedIndex];
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+        if (research) {
+          await this.renderResearchDetail(research);
+        } else {
+          await this.renderResearchList();
+        }
+      }
+      return;
     }
 
     if (this.ui.view === 'error') {

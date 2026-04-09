@@ -8,6 +8,14 @@ export const PHONE_AUDIO_INPUT_KEY = 'even-publisher:phone-audio-input-id';
 let sharedPlaybackAudio: HTMLAudioElement | null = null;
 let sharedPlaybackBlobUrl: string | null = null;
 
+/** Set when `primeSharedPlaybackAudioFromUserGesture` successfully plays the silent clip (session only). */
+let phonePlaybackPrimedThisSession = false;
+
+/** Read-aloud requires this at least once per page load (typically via “Unlock & test phone speaker”). */
+export function hasPhonePlaybackPrimedThisSession(): boolean {
+  return phonePlaybackPrimedThisSession;
+}
+
 /** ~12ms of 8 kHz silence — valid WAV for `HTMLAudioElement.play()` during user gesture. */
 function silentWavDataUri(): string {
   const numChannels = 1;
@@ -128,6 +136,7 @@ export async function primeSharedPlaybackAudioFromUserGesture(): Promise<boolean
     a.pause();
     a.currentTime = 0;
     a.volume = 1;
+    phonePlaybackPrimedThisSession = true;
     return true;
   } catch {
     a.volume = 1;
