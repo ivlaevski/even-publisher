@@ -20,7 +20,7 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
 ## Features
 
 - **Main menu on glasses**
-  - Centered title `Article Publisher` and subtitle `by Ivan Vlaevski v.1.0`.
+  - Centered title `Article Publisher` and subtitle `by Ivan Vlaevski`.
   - Footer message: `Revolute to @ivanvlaevski`.
   - Menu options:
     - **Start new research** – discover fresh news and generate a new research draft.
@@ -52,15 +52,20 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
     - **Draft list** – choose which draft to open.
     - **Research detail** – paginated view with scroll and a double‑tap menu.
     - **Research menu** for the current draft:
-      - **Read aloud** – line‑by‑line TTS playback.
-      - **Start / stop voice prompt (record)** – capture a spoken refinement request via ElevenLabs STT.
+      - **Read aloud** – line‑by‑line TTS playback (requires a one‑time phone unlock each session; see **Read‑aloud mode** below).
+      - **Record voice prompt** – capture a spoken refinement request via ElevenLabs STT (dedicated recording screen with live transcript / level feedback; see **Voice prompts**).
       - **Mark as Ready for Publish** – move draft into the “ready” list.
       - **Cancel research** – delete the draft after a confirmation (Yes / No) dialog and return to the main menu.
+
+- **Phone audio (read aloud prerequisite)**
+  - On many phones and embedded WebViews, autoplay policies block `HTMLAudioElement` until there has been a **user gesture** on the page.
+  - In **Phone audio (read aloud)** on the phone UI, tap **Unlock & test phone speaker** once per app load. That primes the shared playback element used for read‑aloud MP3 clips.
+  - Until that step succeeds, choosing **Read aloud** from the **research menu** shows a short full‑screen message on the glasses; **Tab** returns you to the research detail.
 
 - **Read‑aloud mode**
   - Converts the current research into lines and:
     - Shows one line at a time on the glasses.
-    - Reads each line aloud via ElevenLabs TTS.
+    - Reads each line aloud via ElevenLabs TTS through the same shared `<audio>` path as the unlock step.
   - Gesture controls while in `research-read-aloud`:
     - **Tap** – pause / resume the current line.
     - **Scroll down** – stop audio and move to the next line.
@@ -70,8 +75,9 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
 
 - **Voice prompts (STT)**
   - Uses ElevenLabs speech‑to‑text:
-    - Opens the G2 microphone and streams PCM audio from Even Hub.
-    - Sends audio as WAV to ElevenLabs STT.
+    - Opens the glasses / bridge microphone (`audioControl`) and collects PCM from Even Hub `audioEvent` chunks (the hub may send `audioPcm` as binary, numeric arrays, or base64 after JSON).
+    - While recording, the glasses show a **voice prompt** layout: fixed title/context plus a **live** panel (approximate buffered duration from PCM; optional **interim** captions where the browser exposes `SpeechRecognition` — final text still comes from ElevenLabs after you stop).
+    - Buffered audio is wrapped as WAV and posted to ElevenLabs STT.
     - Stores the transcription in local storage (`even-publisher:last-transcript`) for reuse on the phone.
   - On the phone, a “Use last voice transcript” button fills the refinement prompt textbox with the last transcription.
 
@@ -118,6 +124,7 @@ Basic setup steps:
    - Launch the dev server in a browser on your phone (or the device hosting the Even Hub WebView).
    - You should see the Article Publisher UI with:
      - G2 Connection card.
+     - Phone audio (read aloud) card — unlock/test speaker before first read‑aloud in this session.
      - Prompt Topics card.
      - Prompt Research refinement card.
      - AI & Publishing Settings card.
@@ -161,8 +168,10 @@ Basic setup steps:
     - Small helpers like `clamp` and `generateId`.
 
 - **`src/stt-elevenlabs.ts`**
-  - Handles raw audio streaming from G2 and calls ElevenLabs STT.
-  - Builds WAV containers from PCM chunks and posts them as multipart form data.
+  - Buffers PCM from the hub, builds WAV for ElevenLabs STT, and can notify the UI with **live** buffer stats while recording.
+
+- **`src/phone-audio.ts`**
+  - Shared `HTMLAudioElement` for read‑aloud MP3 blobs, optional `setSinkId` output selection, silent‑clip **prime** for autoplay, and a **session** flag used to gate read‑aloud until unlock succeeds.
 
 ## Getting started (high level)
 
@@ -179,6 +188,7 @@ Basic setup steps:
    - Wait for the status “Connected. Use glasses main menu to start.”
 
 4. **Use the glasses**
+   - From the phone, tap **Unlock & test phone speaker** once if you plan to use **Read aloud** (repeat if the page was reloaded).
    - From the main menu select **Start new research**.
    - Choose a topic, pick a news item, and let the app generate a draft.
    - Use the research menu to read aloud, record voice prompts, or mark as ready.

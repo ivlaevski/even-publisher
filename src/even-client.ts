@@ -856,7 +856,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    const items = topics.map((topic, index) => `${index + 1}. ${topic}`);
+    const items = topics.map((topic, index) => this.sanitizeForDisplay(`${index + 1}. ${topic}`,64));
     items.push('<- Back to main menu');
 
     const list = new ListContainerProperty({
