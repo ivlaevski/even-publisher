@@ -17,6 +17,10 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
 
 **API hosts used at runtime** (typical): `generativelanguage.googleapis.com`, `api.openai.com`, `api.elevenlabs.io`, and your own WordPress origin.
 
+## Usage article
+
+[Article Publisher at Ivan Vlaevski blog](https://ivan.vlaevski.com/article-publisher/)
+
 ## Features
 
 - **Main menu on glasses**
