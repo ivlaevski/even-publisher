@@ -81,6 +81,18 @@ function formatElapsedMmSs(totalSeconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+/** Gesture type from a list row event only — avoids `textEvent` stealing `eventType` on list UIs. */
+function gestureFromListEvent(list: List_ItemEvent | undefined): OsEventTypeList | undefined {
+  if (!list) return undefined;
+  return OsEventTypeList.fromJson(list.eventType) ?? list.eventType;
+}
+
+/** Gesture type from a text container event only. */
+function gestureFromTextEvent(text: Text_ItemEvent | undefined): OsEventTypeList | undefined {
+  if (!text) return undefined;
+  return OsEventTypeList.fromJson(text.eventType) ?? text.eventType;
+}
+
 type ResearchState = {
   researches: Research[];
 };
@@ -140,6 +152,8 @@ export class EvenPublisherClient {
   private voicePromptSrCommitted = '';
   private voicePromptSpeechRec: VoiceSpeechRecognition | null = null;
   private voicePromptTranscriptFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Ignore spurious text events right after `textContainerUpgrade` on the transcript panel. */
+  private voicePromptTranscriptUpgradeAtMs = 0;
 
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
@@ -673,6 +687,7 @@ export class EvenPublisherClient {
           content: text,
         }),
       );
+      this.voicePromptTranscriptUpgradeAtMs = performance.now();
     } catch {
       /* view replaced */
     }
@@ -690,7 +705,7 @@ export class EvenPublisherClient {
       this.voicePromptTranscriptFlushTimer = null;
     }
 
-    const title = this.sanitizeForDisplay(research.title,220);    
+    const title = this.sanitizeForDisplay(research.title, 220);
 
     const infoTextOverlay = new TextContainerProperty({
       containerID: VOICE_PROMPT_INFO_CONTAINER_ID,
@@ -731,7 +746,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRadius: 0,
       paddingLength: 0,
-      content: this.sanitizeForDisplay(title,MAX_CONTENT_LENGTH),
+      content: this.sanitizeForDisplay(title, MAX_CONTENT_LENGTH),
       isEventCapture: 0,
     });
     const transcriptBlock = new TextContainerProperty({
@@ -844,7 +859,6 @@ export class EvenPublisherClient {
   }
 
   private async renderTopicSelect(): Promise<void> {
-    this.ui.view = 'topic-select';
     const topics = this.ui.topics;
 
     if (!topics.length) {
@@ -856,7 +870,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    const items = topics.map((topic, index) => this.sanitizeForDisplay(`${index + 1}. ${topic}`,64));
+    const items = topics.map((topic, index) => this.sanitizeForDisplay(`${index + 1}. ${topic}`, 64));
     items.push('<- Back to main menu');
 
     const list = new ListContainerProperty({
@@ -879,18 +893,21 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
       }),
     );
-
-    setStatus('Select a topic, then tap to continue.');
+    if (success) {
+      this.ui.view = 'topic-select';
+      setStatus('Select a topic, then tap to continue.');
+    } else {
+      appendEventLog(`Failed to show topic select`);
+    }
   }
 
   private async renderAiNewsList(): Promise<void> {
-    this.ui.view = 'new-research-list';
     if (this.ui.aiNews.length === 0) {
       await this.showTextFullScreen('No results.', '[Tab=back]');
       return;
@@ -927,14 +944,19 @@ export class EvenPublisherClient {
       );
     }
 
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: textObjects.length,
         textObject: textObjects,
       }),
     );
 
-    setStatus('News results: swipe to change, tap to inspect, double-tap to go back.');
+    if (success) {
+      setStatus('News results: swipe to change, tap to inspect, double-tap to go back.');
+      this.ui.view = 'new-research-list';
+    } else {
+      appendEventLog(`Failed to show news list`);
+    }
   }
 
   private async renderAiNewsDetail(): Promise<void> {
@@ -965,7 +987,7 @@ export class EvenPublisherClient {
   private async renderResearchList(): Promise<void> {
     const drafts = this.getDraftResearches();
 
-    const items = drafts.map((r, idx) => this.sanitizeForDisplay(`${idx + 1}. ${r.title.slice(0, 60)}`,64));
+    const items = drafts.map((r, idx) => this.sanitizeForDisplay(`${idx + 1}. ${r.title.slice(0, 60)}`, 64));
 
     if (items.length > 19) {
       items.splice(19, items.length - 19);
@@ -1063,7 +1085,7 @@ export class EvenPublisherClient {
     }
   }
 
-  private async renderReadyList(): Promise<void> {    
+  private async renderReadyList(): Promise<void> {
     const ready = this.getReadyResearches();
     const items = ready.map((r, idx) => `${idx + 1}. ${r.title.slice(0, 50)}`);
     if (items.length > 19) {
@@ -1108,7 +1130,6 @@ export class EvenPublisherClient {
   }
 
   private async renderReadyDetail(research: Research): Promise<void> {
-    this.ui.view = 'ready-detail';
     this.currentResearchId = research.id;
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
     const header = `${research.title}\n\nPublish delay (days): ${delay}\n\n`;
@@ -1149,12 +1170,19 @@ export class EvenPublisherClient {
       isEventCapture: 1,
     });
 
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 2,
         textObject: [infoTextOverlay, body]
       }),
     );
+
+    if (success) {
+      setStatus('Research: scroll to read, double-tap for menu.');
+      this.ui.view = 'research-detail';
+    } else {
+      appendEventLog(`Failed to show research detail`);
+    }
   }
 
   private async updateReadyDelayText(research: Research): Promise<void> {
@@ -1410,7 +1438,6 @@ export class EvenPublisherClient {
   }
 
   private async openReadyMenu(research: Research): Promise<void> {
-    this.ui.view = 'ready-menu';
 
     const items = ['Publish now', 'Cancel publishing', 'Back to ready list', 'Back to main menu'];
 
@@ -1434,21 +1461,25 @@ export class EvenPublisherClient {
       }),
     });
 
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 1,
         listObject: [list],
       }),
     );
 
-    setStatus('Ready menu: select an action.');
+    if (success) {
+      setStatus('Ready menu: select an action.');
+      this.ui.view = 'ready-menu';
+    } else {
+      appendEventLog(`Failed to show ready menu`);
+    }
   }
 
   private async openConfirmCancelResearch(research: Research, mode: 'draft' | 'ready'): Promise<void> {
     this.cancelMode = mode;
     this.currentResearchId = research.id;
     const isReady = mode === 'ready';
-    this.ui.view = isReady ? 'confirm-cancel-ready' : 'confirm-cancel-research';
 
     const question = isReady
       ? `Cancel publishing and remove this research?\n\n${research.title}`
@@ -1478,7 +1509,7 @@ export class EvenPublisherClient {
 
     const questionText = this.sanitizeForDisplay(question);
 
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 2,
         textObject: [
@@ -1501,7 +1532,12 @@ export class EvenPublisherClient {
       }),
     );
 
-    setStatus(isReady ? 'Confirm cancel publishing (Yes / No).' : 'Confirm cancel research (Yes / No).');
+    if (success) {
+      setStatus(isReady ? 'Confirm cancel publishing (Yes / No).' : 'Confirm cancel research (Yes / No).');
+      this.ui.view = isReady ? 'confirm-cancel-ready' : 'confirm-cancel-research';
+    } else {
+      appendEventLog(`Failed to show confirm cancel research`);
+    }
   }
 
   private async openResearchMenu(research: Research): Promise<void> {
@@ -1619,7 +1655,7 @@ export class EvenPublisherClient {
       isEventCapture: 1,
     });
 
-    await this.applyRebuildPageContainer(
+    const success = await this.applyRebuildPageContainer(
       new RebuildPageContainer({
         containerTotalNum: 2,
         textObject: [
@@ -1627,8 +1663,14 @@ export class EvenPublisherClient {
       }),
     );
 
-    const config = this.getConfig();
-    await this.playLineAsAudio(config, line, research);
+    if (success) {
+      const config = this.getConfig();
+      await this.playLineAsAudio(config, line, research);
+    } else {
+      appendEventLog(`Failed to show read aloud`);
+    }
+
+
   }
 
   private async finishReadAloud(research: Research): Promise<void> {
@@ -1897,7 +1939,14 @@ export class EvenPublisherClient {
     }
 
     if (this.ui.view === 'topic-select' && event.listEvent) {
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+      const listGesture = gestureFromListEvent(event.listEvent);
+      if (
+        listGesture === OsEventTypeList.SCROLL_TOP_EVENT ||
+        listGesture === OsEventTypeList.SCROLL_BOTTOM_EVENT
+      ) {
+        return;
+      }
+      if (listGesture === OsEventTypeList.CLICK_EVENT || listGesture === undefined) {
         const topics = this.ui.topics;
         const idx = event.listEvent.currentSelectItemIndex ?? 0;
         if (idx >= topics.length) {
@@ -2084,6 +2133,31 @@ export class EvenPublisherClient {
     }
 
     if (this.ui.view === 'prompt-recording') {
+      if (event.sysEvent?.eventType === OsEventTypeList.IMU_DATA_REPORT) {
+        return;
+      }
+
+      const te = event.textEvent;
+      if (
+        te &&
+        (te.containerName === 'vprompt-tr' || te.containerID === VOICE_PROMPT_TRANSCRIPT_CONTAINER_ID) &&
+        performance.now() - this.voicePromptTranscriptUpgradeAtMs < 240
+      ) {
+        return;
+      }
+
+      const listG = gestureFromListEvent(event.listEvent);
+      const textG = gestureFromTextEvent(event.textEvent);
+      const mergedGesture = OsEventTypeList.fromJson(eventType) ?? eventType;
+
+      const clickFromChannels =
+        listG === OsEventTypeList.CLICK_EVENT || textG === OsEventTypeList.CLICK_EVENT;
+      const clickFromMerged =
+        mergedGesture === OsEventTypeList.CLICK_EVENT || mergedGesture === undefined;
+      const doubleFromChannels =
+        listG === OsEventTypeList.DOUBLE_CLICK_EVENT || textG === OsEventTypeList.DOUBLE_CLICK_EVENT;
+      const doubleFromMerged = mergedGesture === OsEventTypeList.DOUBLE_CLICK_EVENT;
+
       const drafts = this.getDraftResearches();
       const research = drafts[this.ui.researchSelectedIndex];
       if (!research) {
@@ -2091,16 +2165,20 @@ export class EvenPublisherClient {
         return;
       }
 
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+      // Stop recording: firmware often reports Tab only on merged `eventType`, not nested text/list.
+      if (clickFromChannels || clickFromMerged) {
         if (this.isVoiceRecording) {
           await this.toggleVoicePromptRecording(research);
           return;
         }
-        await this.renderResearchDetail(research);
+        // Avoid spurious exit to research detail (merged `undefined`); finishing recording is handled above.
+        if (mergedGesture === OsEventTypeList.CLICK_EVENT || clickFromChannels) {
+          await this.renderResearchDetail(research);
+        }
         return;
       }
 
-      if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
+      if (doubleFromChannels || doubleFromMerged) {
         if (this.isVoiceRecording) {
           await cancelSttRecording();
           this.isVoiceRecording = false;
