@@ -1,5 +1,5 @@
 {
-  "name": "even-publisher",
+  "name": "article-publisher",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0 --strictPort",
     "qr": "evenhub qr --port 5173 --path /",
     "init:evenhub": "evenhub init --output app.json",
-    "pack": "npm run build && evenhub pack app.json ./dist --output even-publisher.ehpk",
+    "pack": "npm run build && evenhub pack app.json ./dist --output article-publisher.ehpk",
     "pack:check": "evenhub pack app.json ./dist --check"
   },
   "dependencies": {

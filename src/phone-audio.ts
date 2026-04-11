@@ -1,8 +1,8 @@
 /** Playback sink for `HTMLAudioElement` (read aloud on the phone). Empty = OS default. */
-export const PHONE_AUDIO_OUTPUT_KEY = 'even-publisher:phone-audio-output-id';
+export const PHONE_AUDIO_OUTPUT_KEY = 'article-publisher:phone-audio-output-id';
 
 /** Reserved for future phone-mic use; refinement STT uses the G2 bridge, not this ID. */
-export const PHONE_AUDIO_INPUT_KEY = 'even-publisher:phone-audio-input-id';
+export const PHONE_AUDIO_INPUT_KEY = 'article-publisher:phone-audio-input-id';
 
 /** Single element reused for read-aloud so iOS/WebKit allows `play()` after one in-gesture prime. */
 let sharedPlaybackAudio: HTMLAudioElement | null = null;

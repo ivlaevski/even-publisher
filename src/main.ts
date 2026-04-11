@@ -23,7 +23,7 @@ let statusTimer: number | null = null;
 
 const NO_RESEARCH_ON_GLASSES = 'No research selected on glasses.';
 
-const RESEARCHES_STORAGE_KEY = 'even-publisher:researches';
+const RESEARCHES_STORAGE_KEY = 'article-publisher:researches';
 
 declare global {
   interface Window {
@@ -449,7 +449,7 @@ function bootSettingsUi(): void {
 
   useTranscriptBtn?.addEventListener('click', () => {
     if (!promptTextarea) return;
-    const last = localStorage.getItem('even-publisher:last-transcript') ?? '';
+    const last = localStorage.getItem('article-publisher:last-transcript') ?? '';
     promptTextarea.value = last;
     if (!last) {
       appendEventLog('No last transcript found in storage.');
@@ -567,7 +567,7 @@ async function main() {
 
 void main().catch((error) => {
   // eslint-disable-next-line no-console
-  console.error('[even-publisher] boot failed', error);
+  console.error('[article-publisher] boot failed', error);
   setStatus('App boot failed');
 });
 

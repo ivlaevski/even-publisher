@@ -40,7 +40,7 @@ import {
   type SttLivePayload,
 } from './stt-elevenlabs';
 
-const STORAGE_KEY_RESEARCHES = 'even-publisher:researches';
+const STORAGE_KEY_RESEARCHES = 'article-publisher:researches';
 
 const MAX_CONTENT_LENGTH = 900;
 const MAX_CONTENT_LENGTH_TOTAL = 2000;
@@ -1740,7 +1740,7 @@ export class EvenPublisherClient {
       }
 
       try {
-        localStorage.setItem('even-publisher:last-transcript', transcript);
+        localStorage.setItem('article-publisher:last-transcript', transcript);
       } catch {
         // ignore storage errors
       }

@@ -3,7 +3,7 @@ const LOG_ID = 'event-log';
 
 export function setStatus(message: string): void {
   // eslint-disable-next-line no-console
-  console.log('[even-publisher:status]', message);
+  console.log('[article-publisher:status]', message);
   const el = document.getElementById(STATUS_ID);
   if (el) {
     el.textContent = message;
@@ -12,7 +12,7 @@ export function setStatus(message: string): void {
 
 export function appendEventLog(message: string): void {
   // eslint-disable-next-line no-console
-  console.log('[even-publisher:log]', message);
+  console.log('[article-publisher:log]', message);
   const el = document.getElementById(LOG_ID);
   if (!el) return;
   const now = new Date();
@@ -93,13 +93,13 @@ export function loadConfigFromLocalStorage(): {
 } {
   return {
     googleGenerativeApiKey:
-      localStorage.getItem('even-publisher:google-generative-key') ?? '',
-    openAiApiKey: localStorage.getItem('even-publisher:openai-key') ?? '',
-    openAiModel: localStorage.getItem('even-publisher:openai-model') ?? 'gpt-4.1-mini',
-    wordpressBaseUrl: localStorage.getItem('even-publisher:wp-url') ?? '',
-    wordpressUsername: localStorage.getItem('even-publisher:wp-username') ?? '',
-    wordpressPassword: localStorage.getItem('even-publisher:wp-password') ?? '',
-    elevenLabsApiKey: localStorage.getItem('even-publisher:elevenlabs-key') ?? '',
+      localStorage.getItem('article-publisher:google-generative-key') ?? '',
+    openAiApiKey: localStorage.getItem('article-publisher:openai-key') ?? '',
+    openAiModel: localStorage.getItem('article-publisher:openai-model') ?? 'gpt-4.1-mini',
+    wordpressBaseUrl: localStorage.getItem('article-publisher:wp-url') ?? '',
+    wordpressUsername: localStorage.getItem('article-publisher:wp-username') ?? '',
+    wordpressPassword: localStorage.getItem('article-publisher:wp-password') ?? '',
+    elevenLabsApiKey: localStorage.getItem('article-publisher:elevenlabs-key') ?? '',
   };
 }
 
@@ -112,17 +112,17 @@ export function saveConfigToLocalStorage(config: {
   wordpressPassword: string;
   elevenLabsApiKey: string;
 }): void {
-  localStorage.setItem('even-publisher:google-generative-key', config.googleGenerativeApiKey.trim());
-  localStorage.setItem('even-publisher:openai-key', config.openAiApiKey.trim());
-  localStorage.setItem('even-publisher:openai-model', config.openAiModel.trim());
-  localStorage.setItem('even-publisher:wp-url', config.wordpressBaseUrl.trim());
-  localStorage.setItem('even-publisher:wp-username', config.wordpressUsername.trim());
-  localStorage.setItem('even-publisher:wp-password', config.wordpressPassword.trim());
-  localStorage.setItem('even-publisher:elevenlabs-key', config.elevenLabsApiKey.trim());
+  localStorage.setItem('article-publisher:google-generative-key', config.googleGenerativeApiKey.trim());
+  localStorage.setItem('article-publisher:openai-key', config.openAiApiKey.trim());
+  localStorage.setItem('article-publisher:openai-model', config.openAiModel.trim());
+  localStorage.setItem('article-publisher:wp-url', config.wordpressBaseUrl.trim());
+  localStorage.setItem('article-publisher:wp-username', config.wordpressUsername.trim());
+  localStorage.setItem('article-publisher:wp-password', config.wordpressPassword.trim());
+  localStorage.setItem('article-publisher:elevenlabs-key', config.elevenLabsApiKey.trim());
 }
 
 export function loadTopicsFromLocalStorage(): string[] {
-  const raw = localStorage.getItem('even-publisher:topics') ?? '';
+  const raw = localStorage.getItem('article-publisher:topics') ?? '';
   return raw
     .split('\n')
     .map((value) => value.trim())
@@ -132,7 +132,7 @@ export function loadTopicsFromLocalStorage(): string[] {
 export function saveTopicsToLocalStorage(topics: string[]): void {
   const normalized = topics.map((value) => value.trim()).filter((value) => value.length > 0);
   const payload = normalized.join('\n');
-  localStorage.setItem('even-publisher:topics', payload);
+  localStorage.setItem('article-publisher:topics', payload);
 }
 
 export function clamp(value: number, min: number, max: number): number {

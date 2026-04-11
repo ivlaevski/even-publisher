@@ -37,7 +37,7 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
     - Add a new topic via an input field and “Add topic” button.
     - Select a topic from the list and remove it via “Delete selected”.
     - Persist the list using the “Save list” button.
-  - Topics are stored in `localStorage` (`even-publisher:topics`) and are used when starting new research on the glasses.
+  - Topics are stored in `localStorage` (`article-publisher:topics`) and are used when starting new research on the glasses.
 
 - **Start new research flow**
   - When you choose **Start new research** on the glasses:
@@ -82,7 +82,7 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
     - Opens the glasses / bridge microphone (`audioControl`) and collects PCM from Even Hub `audioEvent` chunks (the hub may send `audioPcm` as binary, numeric arrays, or base64 after JSON).
     - While recording, the glasses show a **voice prompt** layout: fixed title/context plus a **live** panel (approximate buffered duration from PCM; optional **interim** captions where the browser exposes `SpeechRecognition` — final text still comes from ElevenLabs after you stop).
     - Buffered audio is wrapped as WAV and posted to ElevenLabs STT.
-    - Stores the transcription in local storage (`even-publisher:last-transcript`) for reuse on the phone.
+    - Stores the transcription in local storage (`article-publisher:last-transcript`) for reuse on the phone.
   - On the phone, a “Use last voice transcript” button fills the refinement prompt textbox with the last transcription.
 
 - **Ready for publishing & WordPress**
