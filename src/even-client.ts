@@ -93,6 +93,15 @@ function gestureFromTextEvent(text: Text_ItemEvent | undefined): OsEventTypeList
   return OsEventTypeList.fromJson(text.eventType) ?? text.eventType;
 }
 
+/** Prefer gesture from the main reading text surface so header/footer text events do not steal scroll. */
+function scrollGestureForResearchLikeTextEvent(event: EvenHubEvent): OsEventTypeList | undefined {
+  const te = event.textEvent;
+  if (te && (te.containerName === 'research' || te.containerName === 'readydetail')) {
+    return gestureFromTextEvent(te);
+  }
+  return undefined;
+}
+
 type ResearchState = {
   researches: Research[];
 };
@@ -155,8 +164,26 @@ export class EvenPublisherClient {
   /** Ignore spurious text events right after `textContainerUpgrade` on the transcript panel. */
   private voicePromptTranscriptUpgradeAtMs = 0;
 
+  /**
+   * Draft/ready readers call `textContainerUpgrade` twice per page (header + body). The host often
+   * echoes the same scroll direction twice in quick succession; drop the duplicate, not all rapid scrolls.
+   */
+  private lastPagedScrollDir: 'top' | 'bottom' | null = null;
+  private lastPagedScrollDirAtMs = 0;
+
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
+  }
+
+  /** Ignore a second same-direction scroll within a few ms (firmware echo per text upgrade). */
+  private consumeIfNotDuplicateScrollEcho(dir: 'top' | 'bottom', windowMs: number): boolean {
+    const now = performance.now();
+    if (this.lastPagedScrollDir === dir && now - this.lastPagedScrollDirAtMs < windowMs) {
+      return false;
+    }
+    this.lastPagedScrollDir = dir;
+    this.lastPagedScrollDirAtMs = now;
+    return true;
   }
 
   async init(): Promise<void> {
@@ -1078,6 +1105,8 @@ export class EvenPublisherClient {
     );
 
     if (success) {
+      this.lastPagedScrollDir = null;
+      this.lastPagedScrollDirAtMs = 0;
       setStatus('Research: scroll to read, double-tap for menu.');
       this.ui.view = 'research-detail';
     } else {
@@ -1131,11 +1160,9 @@ export class EvenPublisherClient {
 
   private async renderReadyDetail(research: Research): Promise<void> {
     this.currentResearchId = research.id;
-    const delay = clamp(this.ui.promptDelayDays, 0, 10);
-    const header = `${research.title}\n\nPublish delay (days): ${delay}\n\n`;
-    //const footer = '\n\nDouble-tap for menu';
+    const header = `${research.title}\n\n[Ready for publish]\n\n`;
 
-    const full = header + research.content; // + footer;
+    const full = header + research.content;
     this.ui.readyPages = this.buildPages(full);
     this.ui.readyPageIndex = 0;
     const contentText = this.sanitizeForDisplay(this.ui.readyPages[0] ?? '', MAX_CONTENT_LENGTH);
@@ -1178,21 +1205,22 @@ export class EvenPublisherClient {
     );
 
     if (success) {
+      this.lastPagedScrollDir = null;
+      this.lastPagedScrollDirAtMs = 0;
       setStatus('Research: scroll to read, double-tap for menu.');
-      this.ui.view = 'research-detail';
+      this.ui.view = 'ready-detail';
     } else {
-      appendEventLog(`Failed to show research detail`);
+      appendEventLog(`Failed to show ready research detail`);
     }
   }
 
   private async updateReadyDelayText(research: Research): Promise<void> {
-    const delay = clamp(this.ui.promptDelayDays, 0, 10);
-    const header = `${research.title}\n\n`;
-    const full = header + research.content;
-    this.ui.readyPages = this.buildPages(full);
+    //this.currentResearchId = research.id;
+    //const header = `${research.title}\n\n[Ready for publish]\n\n`;
+    //const full = header + research.content;
     this.ui.readyPageIndex = clamp(this.ui.readyPageIndex, 0, this.ui.readyPages.length - 1);
-    const rawPage = this.ui.readyPages[this.ui.readyPageIndex] ?? '';
-    const page = this.sanitizeForDisplay(rawPage);
+    //const rawPage = this.ui.readyPages[this.ui.readyPageIndex] ?? '';
+    const page = this.sanitizeForDisplay(this.ui.readyPages[this.ui.readyPageIndex] ?? '', MAX_CONTENT_LENGTH);
 
     await this.bridge.textContainerUpgrade(
       new TextContainerUpgrade({
@@ -2019,7 +2047,13 @@ export class EvenPublisherClient {
         return;
       }
 
-      if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+      const scrollG =
+        scrollGestureForResearchLikeTextEvent(event) ??
+        OsEventTypeList.fromJson(eventType) ??
+        eventType;
+
+      if (scrollG === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+        if (!this.consumeIfNotDuplicateScrollEcho('bottom', 90)) return;
         if (this.ui.researchPageIndex < this.ui.researchPages.length - 1) {
           this.ui.researchPageIndex += 1;
         }
@@ -2027,7 +2061,8 @@ export class EvenPublisherClient {
         return;
       }
 
-      if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
+      if (scrollG === OsEventTypeList.SCROLL_TOP_EVENT) {
+        if (!this.consumeIfNotDuplicateScrollEcho('top', 90)) return;
         if (this.ui.researchPageIndex > 0) {
           this.ui.researchPageIndex -= 1;
         }
@@ -2214,13 +2249,13 @@ export class EvenPublisherClient {
         await this.renderReadyList();
         return;
       }
-      // if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-      //   //this.ui.promptDelayDays = clamp(this.ui.promptDelayDays + 1, 0, 10);
-      //   await this.updateReadyDelayText(research);
-      //   return;
-      // }
+      const readyScrollG =
+        scrollGestureForResearchLikeTextEvent(event) ??
+        OsEventTypeList.fromJson(eventType) ??
+        eventType;
 
-      if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
+      if (readyScrollG === OsEventTypeList.SCROLL_TOP_EVENT) {
+        if (!this.consumeIfNotDuplicateScrollEcho('top', 90)) return;
         if (this.ui.readyPageIndex === 0) {
           this.ui.promptDelayDays = clamp(this.ui.promptDelayDays - 1, 0, 10);
           await this.updateReadyDelayText(research);
@@ -2231,7 +2266,8 @@ export class EvenPublisherClient {
         return;
       }
 
-      if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+      if (readyScrollG === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+        if (!this.consumeIfNotDuplicateScrollEcho('bottom', 90)) return;
         if (this.ui.readyPageIndex < this.ui.readyPages.length - 1) {
           this.ui.readyPageIndex += 1;
         }

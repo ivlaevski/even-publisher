@@ -241,6 +241,14 @@
         display: none !important;
       }
 
+      #phone-audio-start-banner {
+        margin-top: 1.25rem;
+      }
+
+      #phone-audio-start-banner[hidden] {
+        display: none !important;
+      }
+
       #phone-audio {
         grid-column: 1 / -1;
       }
@@ -313,6 +321,22 @@
           glasses.
         </p>
       </header>
+
+      <section class="card" id="phone-audio-start-banner">
+        <h2>Read aloud on this phone</h2>
+        <p class="muted" style="margin: 0 0 0.75rem">
+          <strong>Read aloud</strong> from the glasses plays on this device. On iPhone and many Android WebViews you must
+          unlock audio with a tap here first (same action as in <strong>Phone audio</strong> below).
+        </p>
+        <div class="btn-row">
+          <button type="button" id="audio-unlock-test-start" class="btn btn-primary">
+            Unlock &amp; test phone speaker
+          </button>
+          <button type="button" id="phone-audio-start-banner-dismiss" class="btn btn-ghost">
+            I won&apos;t use phone audio
+          </button>
+        </div>
+      </section>
 
       <div class="grid">
         <pre id="status">Booting…</pre>               

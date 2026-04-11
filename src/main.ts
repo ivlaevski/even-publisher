@@ -24,6 +24,7 @@ let statusTimer: number | null = null;
 const NO_RESEARCH_ON_GLASSES = 'No research selected on glasses.';
 
 const RESEARCHES_STORAGE_KEY = 'article-publisher:researches';
+let readAloudStartBannerDismissed = false;
 
 declare global {
   interface Window {
@@ -73,6 +74,67 @@ function allAiSettingsFieldsFilled(): boolean {
   return AI_SETTINGS_INPUT_IDS.every((id) => {
     const el = document.getElementById(id) as HTMLInputElement | null;
     return el != null && el.value.trim().length > 0;
+  });
+}
+
+async function runPhoneAudioUnlockFromUserClick(): Promise<void> {
+  try {
+    const htmlOk = await primeSharedPlaybackAudioFromUserGesture();
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (AC) {
+      const ctx = new AC();
+      await ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.07;
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    }
+    if (htmlOk) {
+      setStatus(
+        'Phone audio: unlock OK — read aloud uses this same speaker path (tap here again if playback stops working).',
+      );
+      appendEventLog('Phone audio: HTMLAudioElement + Web Audio unlock OK.');
+    } else {
+      setStatus(
+        'Phone audio: Web Audio OK, but HTMLAudioElement silent clip was blocked — try again or check browser permissions.',
+      );
+      appendEventLog('Phone audio: HTMLAudioElement prime failed (read aloud may still block).');
+    }
+  } catch (err) {
+    const m = err instanceof Error ? err.message : String(err);
+    setStatus(`Phone audio test: ${m}`);
+    appendEventLog(`Phone audio test failed: ${m}`);
+  }
+}
+
+function bootReadAloudStartBanner(): void {
+  const section = document.getElementById('phone-audio-start-banner');
+  const unlockStart = document.getElementById('audio-unlock-test-start') as HTMLButtonElement | null;
+  const dismissBtn = document.getElementById('phone-audio-start-banner-dismiss') as HTMLButtonElement | null;
+  if (!section || !unlockStart || !dismissBtn) return;
+
+  if (readAloudStartBannerDismissed) {
+    section.setAttribute('hidden', '');
+  } else {
+    section.removeAttribute('hidden');
+  }
+
+  unlockStart.addEventListener('click', () => {
+    void runPhoneAudioUnlockFromUserClick();
+    readAloudStartBannerDismissed = true;
+    section.setAttribute('hidden', '');
+  });
+
+  dismissBtn.addEventListener('click', () => {
+    readAloudStartBannerDismissed = true;
+    section.setAttribute('hidden', '');
   });
 }
 
@@ -166,41 +228,8 @@ function bootPhoneAudioUi(): void {
     appendEventLog(`Phone audio: stored mic selection (informational).`);
   });
 
-  unlockBtn.addEventListener('click', async () => {
-    try {
-      const htmlOk = await primeSharedPlaybackAudioFromUserGesture();
-      const AC =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (AC) {
-        const ctx = new AC();
-        await ctx.resume();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        gain.gain.value = 0.07;
-        osc.type = 'sine';
-        osc.frequency.value = 880;
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.12);
-      }
-      if (htmlOk) {
-        setStatus(
-          'Phone audio: unlock OK — read aloud uses this same speaker path (tap here again if playback stops working).',
-        );
-        appendEventLog('Phone audio: HTMLAudioElement + Web Audio unlock OK.');
-      } else {
-        setStatus(
-          'Phone audio: Web Audio OK, but HTMLAudioElement silent clip was blocked — try again or check browser permissions.',
-        );
-        appendEventLog('Phone audio: HTMLAudioElement prime failed (read aloud may still block).');
-      }
-    } catch (err) {
-      const m = err instanceof Error ? err.message : String(err);
-      setStatus(`Phone audio test: ${m}`);
-      appendEventLog(`Phone audio test failed: ${m}`);
-    }
+  unlockBtn.addEventListener('click', () => {
+    void runPhoneAudioUnlockFromUserClick();
   });
 
   refreshBtn.addEventListener('click', () => {
@@ -496,6 +525,7 @@ async function main() {
   setStatus('Waiting for Even bridge…');
 
   bootSettingsUi();
+  bootReadAloudStartBanner();
   bootPhoneAudioUi();
   bootResearchPhoneLists();
   //appendEventLog('[main] bootSettingsUi ok');
@@ -509,7 +539,7 @@ async function main() {
     }
     try {
       appendEventLog('Connecting to Even bridge…');
-      const bridge = await waitForEvenAppBridge();      
+      const bridge = await waitForEvenAppBridge();
 
       client = new EvenPublisherClient(bridge);
       await client.init();
