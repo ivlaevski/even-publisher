@@ -102,6 +102,16 @@ function scrollGestureForResearchLikeTextEvent(event: EvenHubEvent): OsEventType
   return undefined;
 }
 
+/** AI news list uses `aiitem0`…`aiitem2` text rows; prefer their event type for scroll (avoids merged-type noise). */
+function scrollGestureForAiNewsList(event: EvenHubEvent): OsEventTypeList | undefined {
+  const te = event.textEvent;
+  const name = te?.containerName ?? '';
+  if (te && /^aiitem[0-2]$/.test(name)) {
+    return gestureFromTextEvent(te);
+  }
+  return undefined;
+}
+
 type ResearchState = {
   researches: Research[];
 };
@@ -1989,12 +1999,19 @@ export class EvenPublisherClient {
     }
 
     if (this.ui.view === 'new-research-list') {
-      if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+      const aiScrollG =
+        scrollGestureForAiNewsList(event) ??
+        OsEventTypeList.fromJson(eventType) ??
+        eventType;
+
+      if (aiScrollG === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+        if (!this.consumeIfNotDuplicateScrollEcho('bottom', 90)) return;
         this.ui.aiSelectedIndex = clamp(this.ui.aiSelectedIndex + 1, 0, this.ui.aiNews.length - 1);
         await this.renderAiNewsList();
         return;
       }
-      if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
+      if (aiScrollG === OsEventTypeList.SCROLL_TOP_EVENT) {
+        if (!this.consumeIfNotDuplicateScrollEcho('top', 90)) return;
         this.ui.aiSelectedIndex = clamp(this.ui.aiSelectedIndex - 1, 0, this.ui.aiNews.length - 1);
         await this.renderAiNewsList();
         return;
