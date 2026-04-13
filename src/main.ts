@@ -1,4 +1,4 @@
-import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk';
+import { waitForEvenAppBridge, type EvenAppBridge } from '@evenrealities/even_hub_sdk';
 
 import { EvenPublisherClient } from './even-client';
 import type { Research } from './types';
@@ -7,6 +7,7 @@ import {
   PHONE_AUDIO_OUTPUT_KEY,
   phoneAudioOutputSupportsSink,
   primeSharedPlaybackAudioFromUserGesture,
+  setPhoneAudioStorageBridge,
 } from './phone-audio';
 import {
   appendEventLog,
@@ -20,11 +21,35 @@ import {
 
 let client: EvenPublisherClient | null = null;
 let statusTimer: number | null = null;
+let storageBridge: EvenAppBridge | null = null;
+let settingsUiWired = false;
+let refreshSettingsUiFromStorage: (() => Promise<void>) | null = null;
 
 const NO_RESEARCH_ON_GLASSES = 'No research selected on glasses.';
 
 const RESEARCHES_STORAGE_KEY = 'article-publisher:researches';
 let readAloudStartBannerDismissed = false;
+
+async function getStorageValue(key: string): Promise<string> {
+  if (storageBridge) return (await storageBridge.getLocalStorage(key)) ?? '';
+  try {
+    return localStorage.getItem(key) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+async function setStorageValue(key: string, value: string): Promise<void> {
+  if (storageBridge) {
+    await storageBridge.setLocalStorage(key, value);
+    return;
+  }
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore storage errors */
+  }
+}
 
 declare global {
   interface Window {
@@ -37,7 +62,7 @@ async function loadResearchesForPhoneLists(): Promise<Research[]> {
     return client.getResearchesForPhoneUi();
   }
   try {
-    const raw = localStorage.getItem(RESEARCHES_STORAGE_KEY);
+    const raw = await getStorageValue(RESEARCHES_STORAGE_KEY);
     if (!raw) return [];
     const value = JSON.parse(raw) as unknown;
     return Array.isArray(value) ? (value as Research[]) : [];
@@ -56,7 +81,7 @@ async function deleteResearchEntryFromPhone(id: string): Promise<void> {
   }
   const list = await loadResearchesForPhoneLists();
   const next = list.filter((r) => r.id !== id);
-  localStorage.setItem(RESEARCHES_STORAGE_KEY, JSON.stringify(next));
+  await setStorageValue(RESEARCHES_STORAGE_KEY, JSON.stringify(next));
   appendEventLog('Research removed from browser storage only — connect glasses to sync with G2.');
 }
 
@@ -182,8 +207,8 @@ function bootPhoneAudioUi(): void {
     );
     infoEl.textContent = lines.length ? lines.join('\n') : 'No media devices reported.';
 
-    const savedOut = localStorage.getItem(PHONE_AUDIO_OUTPUT_KEY) ?? '';
-    const savedIn = localStorage.getItem(PHONE_AUDIO_INPUT_KEY) ?? '';
+    const savedOut = await getStorageValue(PHONE_AUDIO_OUTPUT_KEY);
+    const savedIn = await getStorageValue(PHONE_AUDIO_INPUT_KEY);
 
     if (phoneAudioOutputSupportsSink()) {
       outputSel.disabled = false;
@@ -216,16 +241,18 @@ function bootPhoneAudioUi(): void {
 
   outputSel.addEventListener('change', () => {
     const v = outputSel.value.trim();
-    if (v) localStorage.setItem(PHONE_AUDIO_OUTPUT_KEY, v);
-    else localStorage.removeItem(PHONE_AUDIO_OUTPUT_KEY);
-    appendEventLog(`Phone audio: playback output ${v ? 'set' : 'cleared (system default)'}.`);
+    void (async () => {
+      await setStorageValue(PHONE_AUDIO_OUTPUT_KEY, v);
+      appendEventLog(`Phone audio: playback output ${v ? 'set' : 'cleared (system default)'}.`);
+    })();
   });
 
   inputSel.addEventListener('change', () => {
     const v = inputSel.value.trim();
-    if (v) localStorage.setItem(PHONE_AUDIO_INPUT_KEY, v);
-    else localStorage.removeItem(PHONE_AUDIO_INPUT_KEY);
-    appendEventLog(`Phone audio: stored mic selection (informational).`);
+    void (async () => {
+      await setStorageValue(PHONE_AUDIO_INPUT_KEY, v);
+      appendEventLog(`Phone audio: stored mic selection (informational).`);
+    })();
   });
 
   unlockBtn.addEventListener('click', () => {
@@ -329,9 +356,7 @@ function bootResearchPhoneLists(): void {
   void render();
 }
 
-function bootSettingsUi(): void {
-  const config = loadConfigFromLocalStorage();
-
+async function bootSettingsUi(): Promise<void> {
   const googleGenerativeKeyInput = document.getElementById('google-generative-key') as HTMLInputElement | null;
   const openAiKeyInput = document.getElementById('openai-key') as HTMLInputElement | null;
   const openAiModelInput = document.getElementById('openai-model') as HTMLInputElement | null;
@@ -349,14 +374,6 @@ function bootSettingsUi(): void {
   const topicsAddBtn = document.getElementById('topics-add') as HTMLButtonElement | null;
   const topicsDeleteBtn = document.getElementById('topics-delete') as HTMLButtonElement | null;
   const topicsSaveBtn = document.getElementById('topics-save') as HTMLButtonElement | null;
-
-  if (googleGenerativeKeyInput) googleGenerativeKeyInput.value = config.googleGenerativeApiKey;
-  if (openAiKeyInput) openAiKeyInput.value = config.openAiApiKey;
-  if (openAiModelInput) openAiModelInput.value = config.openAiModel;
-  if (elevenLabsKeyInput) elevenLabsKeyInput.value = config.elevenLabsApiKey;
-  if (wpUrlInput) wpUrlInput.value = config.wordpressBaseUrl;
-  if (wpUserInput) wpUserInput.value = config.wordpressUsername;
-  if (wpPassInput) wpPassInput.value = config.wordpressPassword;
 
   const aiSettingsSummary = document.getElementById('ai-settings-summary');
   const aiSettingsBody = document.getElementById('ai-settings-body');
@@ -395,7 +412,7 @@ function bootSettingsUi(): void {
     });
   }
 
-  let topics = loadTopicsFromLocalStorage();
+  let topics: string[] = [];
 
   const renderTopicsList = () => {
     if (!topicsListEl) return;
@@ -414,7 +431,28 @@ function bootSettingsUi(): void {
     });
   };
 
-  renderTopicsList();
+  const reloadFromStorage = async (): Promise<void> => {
+    const config = await loadConfigFromLocalStorage(storageBridge);
+    if (googleGenerativeKeyInput) googleGenerativeKeyInput.value = config.googleGenerativeApiKey;
+    if (openAiKeyInput) openAiKeyInput.value = config.openAiApiKey;
+    if (openAiModelInput) openAiModelInput.value = config.openAiModel;
+    if (elevenLabsKeyInput) elevenLabsKeyInput.value = config.elevenLabsApiKey;
+    if (wpUrlInput) wpUrlInput.value = config.wordpressBaseUrl;
+    if (wpUserInput) wpUserInput.value = config.wordpressUsername;
+    if (wpPassInput) wpPassInput.value = config.wordpressPassword;
+    topics = await loadTopicsFromLocalStorage(storageBridge);
+    renderTopicsList();
+    syncAiSettingsPanel();
+  };
+
+  refreshSettingsUiFromStorage = reloadFromStorage;
+
+  if (settingsUiWired) {
+    await reloadFromStorage();
+    return;
+  }
+
+  settingsUiWired = true;
 
   saveBtn?.addEventListener('click', () => {
     const next = {
@@ -426,13 +464,15 @@ function bootSettingsUi(): void {
       wordpressUsername: wpUserInput?.value ?? '',
       wordpressPassword: wpPassInput?.value ?? '',
     };
-    saveConfigToLocalStorage(next);
-    appendEventLog('Settings saved.');
-    setStatus('Settings saved. You can now start a new research from glasses.');
-    if (allAiSettingsFieldsFilled()) {
-      aiSettingsExpanded = false;
-      syncAiSettingsPanel();
-    }
+    void (async () => {
+      await saveConfigToLocalStorage(storageBridge, next);
+      appendEventLog('Settings saved.');
+      setStatus('Settings saved. You can now start a new research from glasses.');
+      if (allAiSettingsFieldsFilled()) {
+        aiSettingsExpanded = false;
+        syncAiSettingsPanel();
+      }
+    })();
   });
 
   topicsAddBtn?.addEventListener('click', () => {
@@ -443,9 +483,11 @@ function bootSettingsUi(): void {
     }
     if (!topics.includes(value)) {
       topics = [...topics, value];
-      saveTopicsToLocalStorage(topics);
-      renderTopicsList();
-      appendEventLog(`Topic added: ${value}`);
+      void (async () => {
+        await saveTopicsToLocalStorage(storageBridge, topics);
+        renderTopicsList();
+        appendEventLog(`Topic added: ${value}`);
+      })();
     }
     if (newTopicInput) {
       newTopicInput.value = '';
@@ -463,28 +505,34 @@ function bootSettingsUi(): void {
     if (index >= 0 && index < topics.length) {
       const removed = topics[index];
       topics = topics.filter((_, i) => i !== index);
-      saveTopicsToLocalStorage(topics);
-      renderTopicsList();
-      appendEventLog(`Topic deleted: ${removed}`);
-      setStatus(`Deleted topic: ${removed}`);
+      void (async () => {
+        await saveTopicsToLocalStorage(storageBridge, topics);
+        renderTopicsList();
+        appendEventLog(`Topic deleted: ${removed}`);
+        setStatus(`Deleted topic: ${removed}`);
+      })();
     }
   });
 
   topicsSaveBtn?.addEventListener('click', () => {
-    saveTopicsToLocalStorage(topics);
-    appendEventLog('Topics list saved.');
-    setStatus('Topics saved. They will be used when starting new research.');
+    void (async () => {
+      await saveTopicsToLocalStorage(storageBridge, topics);
+      appendEventLog('Topics list saved.');
+      setStatus('Topics saved. They will be used when starting new research.');
+    })();
   });
 
   useTranscriptBtn?.addEventListener('click', () => {
     if (!promptTextarea) return;
-    const last = localStorage.getItem('article-publisher:last-transcript') ?? '';
-    promptTextarea.value = last;
-    if (!last) {
-      appendEventLog('No last transcript found in storage.');
-    } else {
-      appendEventLog('Loaded last transcript into prompt box.');
-    }
+    void (async () => {
+      const last = await getStorageValue('article-publisher:last-transcript');
+      promptTextarea.value = last;
+      if (!last) {
+        appendEventLog('No last transcript found in storage.');
+      } else {
+        appendEventLog('Loaded last transcript into prompt box.');
+      }
+    })();
   });
 
   /** `undefined` = never synced yet (skip first clear so we do not wipe the box on cold start). */
@@ -518,13 +566,24 @@ function bootSettingsUi(): void {
       researchStatus.textContent = `Current research: ${current.title}`;
     }
   };
+
+  await reloadFromStorage();
 }
 
 async function main() {
   installGlobalErrorLogging();
   setStatus('Waiting for Even bridge…');
+  const loadingOverlay = document.getElementById('phone-loading-overlay');
+  const loadingText = document.getElementById('phone-loading-overlay-text');
+  const setLoading = (isVisible: boolean, message?: string): void => {
+    if (message && loadingText) loadingText.textContent = message;
+    if (!loadingOverlay) return;
+    if (isVisible) loadingOverlay.removeAttribute('hidden');
+    else loadingOverlay.setAttribute('hidden', '');
+  };
 
-  bootSettingsUi();
+  setLoading(true, 'Loading configuration…');
+  await bootSettingsUi();
   bootReadAloudStartBanner();
   bootPhoneAudioUi();
   bootResearchPhoneLists();
@@ -540,6 +599,10 @@ async function main() {
     try {
       appendEventLog('Connecting to Even bridge…');
       const bridge = await waitForEvenAppBridge();
+      storageBridge = bridge;
+      setPhoneAudioStorageBridge(bridge);
+      setLoading(true, 'Loading bridge storage…');
+      await refreshSettingsUiFromStorage?.();
 
       client = new EvenPublisherClient(bridge);
       await client.init();
@@ -565,6 +628,8 @@ async function main() {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(`Bridge not available: ${message}\n\nRunning in browser-only mode.`);
       appendEventLog(`Bridge connection failed: ${message}`);
+    } finally {
+      setLoading(false);
     }
   };
 

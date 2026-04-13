@@ -200,7 +200,7 @@ export class EvenPublisherClient {
     await this.waitForGlassesConnected(12000);
     await this.ensureStartupUi();
     await this.loadResearches();
-    this.ui.topics = loadTopicsFromLocalStorage();
+    this.ui.topics = await loadTopicsFromLocalStorage(this.bridge);
     await new Promise((r) => setTimeout(r, 3500));
     await this.renderMainMenu();
 
@@ -241,8 +241,8 @@ export class EvenPublisherClient {
     );
   }
 
-  private getConfig(): PublisherConfig {
-    const cfg = loadConfigFromLocalStorage();
+  private async getConfig(): Promise<PublisherConfig> {
+    const cfg = await loadConfigFromLocalStorage(this.bridge);
     return {
       googleGenerativeApiKey: cfg.googleGenerativeApiKey,
       openAiApiKey: cfg.openAiApiKey,
@@ -448,11 +448,6 @@ export class EvenPublisherClient {
   private async saveResearches(): Promise<void> {
     const json = JSON.stringify(this.state.researches);
     await this.bridge.setLocalStorage(STORAGE_KEY_RESEARCHES, json);
-    try {
-      localStorage.setItem(STORAGE_KEY_RESEARCHES, json);
-    } catch {
-      /* storage unavailable */
-    }
   }
 
   private getDraftResearches(): Research[] {
@@ -1264,7 +1259,7 @@ export class EvenPublisherClient {
   }
 
   private async startNewResearchFlow(): Promise<void> {
-    const config = this.getConfig();
+    const config = await this.getConfig();
     if (!config.googleGenerativeApiKey?.trim()) {
       await this.showTextFullScreen(
         'Google Gemini API key missing.\n\nSet it under AI & Publishing Settings on the phone, then try again.',
@@ -1273,7 +1268,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    this.ui.topics = loadTopicsFromLocalStorage();
+    this.ui.topics = await loadTopicsFromLocalStorage(this.bridge);
     if (this.ui.topics.length > 0 && !this.ui.selectedTopic) {
       await this.renderTopicSelect();
       return;
@@ -1300,7 +1295,7 @@ export class EvenPublisherClient {
     const item = this.ui.aiNews[this.ui.aiSelectedIndex];
     if (!item) return;
 
-    const config = this.getConfig();
+    const config = await this.getConfig();
     if (!config.openAiApiKey) {
       await this.showTextFullScreen(
         'OpenAI API key missing.\n\nSet the key on the phone screen, then try again.',
@@ -1401,7 +1396,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    const config = this.getConfig();
+    const config = await this.getConfig();
     if (!config.openAiApiKey) {
       await this.showTextFullScreen(
         'OpenAI API key missing.\n\nSet the key on the phone screen, then try again.',
@@ -1461,7 +1456,7 @@ export class EvenPublisherClient {
     }
 
     const delay = clamp(this.ui.promptDelayDays, 0, 10);
-    const config = this.getConfig();
+    const config = await this.getConfig();
     try {
       setStatus('Publishing to WordPress…');
       await publishToWordPress(config, research, delay);
@@ -1625,7 +1620,7 @@ export class EvenPublisherClient {
   }
 
   private async startReadAloud(research: Research): Promise<void> {
-    const config = this.getConfig();
+    const config = await this.getConfig();
     if (!config.elevenLabsApiKey?.trim()) {
       await this.showTextFullScreen(
         `${research.title}\n\n` +
@@ -1702,7 +1697,7 @@ export class EvenPublisherClient {
     );
 
     if (success) {
-      const config = this.getConfig();
+      const config = await this.getConfig();
       await this.playLineAsAudio(config, line, research);
     } else {
       appendEventLog(`Failed to show read aloud`);
@@ -1774,7 +1769,7 @@ export class EvenPublisherClient {
   }
 
   private async toggleVoicePromptRecording(research: Research): Promise<void> {
-    const config = this.getConfig();
+    const config = await this.getConfig();
     if (!config.elevenLabsApiKey) {
       await this.showTextFullScreen(
         `${research.title}\n\n` +
@@ -1819,11 +1814,7 @@ export class EvenPublisherClient {
         return;
       }
 
-      try {
-        localStorage.setItem('article-publisher:last-transcript', transcript);
-      } catch {
-        // ignore storage errors
-      }
+      await this.bridge.setLocalStorage('article-publisher:last-transcript', transcript);
 
       await this.applyPromptToCurrentResearch(transcript);
 
@@ -2005,13 +1996,13 @@ export class EvenPublisherClient {
         eventType;
 
       if (aiScrollG === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
-        if (!this.consumeIfNotDuplicateScrollEcho('bottom', 90)) return;
+        if (!this.consumeIfNotDuplicateScrollEcho('bottom', 900)) return;
         this.ui.aiSelectedIndex = clamp(this.ui.aiSelectedIndex + 1, 0, this.ui.aiNews.length - 1);
         await this.renderAiNewsList();
         return;
       }
       if (aiScrollG === OsEventTypeList.SCROLL_TOP_EVENT) {
-        if (!this.consumeIfNotDuplicateScrollEcho('top', 90)) return;
+        if (!this.consumeIfNotDuplicateScrollEcho('top', 900)) return;
         this.ui.aiSelectedIndex = clamp(this.ui.aiSelectedIndex - 1, 0, this.ui.aiNews.length - 1);
         await this.renderAiNewsList();
         return;

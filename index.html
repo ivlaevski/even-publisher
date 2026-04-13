@@ -1,331 +1,501 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Article Publisher – G2</title>
-    <style>
-      body {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        max-width: 640px;
-        margin: 2rem auto;
-        padding: 0 1rem 3rem;
-        background: #050509;
-        color: #f5f5f5;
-      }
 
-      h1 {
-        margin-bottom: 0.25rem;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        gap: 0.35rem 0.6rem;
-      }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Article Publisher – G2</title>
+  <style>
+    :root {
+      --bg-main: #050509;
+      --text-main: #f5f5f5;
+      --bg-panel: #020617;
+      --bg-panel-soft: #111827;
+      --border-main: #111827;
+      --border-soft: #1f2937;
+      --text-muted: #9ca3af;
+      --text-subtle: #6b7280;
+      --overlay: rgba(2, 6, 23, 0.84);
+      --menu-overlay: rgba(2, 6, 23, 0.72);
+    }
 
-      .app-version {
-        font-size: 0.55em;
-        font-weight: 500;
-        letter-spacing: 0.02em;
-        color: #6b7280;
-      }
+    body.theme-light {
+      --bg-main: #f8fafc;
+      --text-main: #0f172a;
+      --bg-panel: #ffffff;
+      --bg-panel-soft: #e2e8f0;
+      --border-main: #dbe4f0;
+      --border-soft: #cbd5e1;
+      --text-muted: #475569;
+      --text-subtle: #64748b;
+      --overlay: rgba(15, 23, 42, 0.28);
+      --menu-overlay: rgba(15, 23, 42, 0.25);
+    }
 
-      .muted {
-        color: #9ca3af;
-        font-size: 0.9rem;
-      }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 640px;
+      margin: 2rem auto;
+      padding: 0 1rem 3rem;
+      background: var(--bg-main);
+      color: var(--text-main);
+    }
 
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .hamburger-btn {
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 0.65rem;
+      border: 1px solid var(--border-soft);
+      background: var(--bg-panel);
+      color: var(--text-main);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.2rem;
+    }
+
+    .hamburger-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--menu-overlay);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 140ms ease;
+      z-index: 19;
+    }
+
+    .hamburger-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .hamburger-menu {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: min(84vw, 320px);
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border-main);
+      transform: translateX(-101%);
+      transition: transform 150ms ease;
+      z-index: 20;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+
+    .hamburger-menu.open {
+      transform: translateX(0);
+    }
+
+    .hamburger-menu h2 {
+      margin: 0 0 0.65rem;
+      font-size: 0.95rem;
+    }
+
+    .menu-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .menu-link {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--border-soft);
+      border-radius: 0.6rem;
+      background: var(--bg-panel);
+      color: var(--text-main);
+      padding: 0.55rem 0.65rem;
+      cursor: pointer;
+      font-size: 0.86rem;
+    }
+
+    .menu-link.active {
+      border-color: #4f46e5;
+      background: rgba(79, 70, 229, 0.2);
+    }
+
+    .app-page {
+      margin-top: 1.25rem;
+    }
+
+    .app-page[hidden] {
+      display: none !important;
+    }
+
+    #phone-loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--overlay);
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+
+    #phone-loading-overlay[hidden] {
+      display: none !important;
+    }
+
+    .phone-loading-card {
+      width: min(92vw, 420px);
+      border: 1px solid var(--border-soft);
+      border-radius: 0.8rem;
+      background: var(--bg-panel);
+      color: var(--text-main);
+      text-align: center;
+      padding: 1rem 1.1rem;
+    }
+
+    h1 {
+      margin-bottom: 0.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.35rem 0.6rem;
+    }
+
+    .app-version {
+      font-size: 0.55em;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      color: var(--text-subtle);
+    }
+
+    .muted {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .card {
+      background: radial-gradient(circle at top left, var(--bg-panel-soft), var(--bg-panel));
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      border: 1px solid var(--border-main);
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.9);
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      margin: 0 0 0.5rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      margin-top: 0.75rem;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 0.45rem 0.55rem;
+      border-radius: 0.45rem;
+      border: 1px solid var(--border-soft);
+      background: var(--bg-panel);
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.85rem;
+      box-sizing: border-box;
+    }
+
+    input:focus,
+    select:focus {
+      outline: 2px solid #4f46e5;
+      outline-offset: 1px;
+      border-color: transparent;
+    }
+
+    textarea:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    #research-refinement .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      padding: 0.5rem 0.9rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      font-family: inherit;
+      transition: background 120ms ease, transform 60ms ease, box-shadow 120ms ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(to right, #6366f1, #4f46e5);
+      color: white;
+      box-shadow: 0 12px 25px rgba(79, 70, 229, 0.6);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(to right, #818cf8, #6366f1);
+      transform: translateY(-1px);
+      box-shadow: 0 18px 38px rgba(79, 70, 229, 0.75);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+      box-shadow: 0 10px 20px rgba(79, 70, 229, 0.6);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-main);
+      border: 1px solid var(--border-soft);
+    }
+
+    .btn-ghost:hover {
+      background: rgba(31, 41, 55, 0.8);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .topic-list {
+      list-style: none;
+      padding: 0;
+      margin: 0.35rem 0 0.25rem;
+      max-height: 120px;
+      overflow-y: auto;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border-soft);
+      background: var(--bg-panel);
+    }
+
+    .topic-list li {
+      padding: 0.35rem 0.55rem;
+      font-size: 0.8rem;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.8);
+      cursor: pointer;
+    }
+
+    .topic-list li:last-child {
+      border-bottom: none;
+    }
+
+    .topic-list li.selected {
+      background: rgba(79, 70, 229, 0.35);
+    }
+
+    #status {
+      margin-top: 1rem;
+      padding: 0.75rem 0.9rem;
+      background: var(--bg-panel);
+      border-radius: 0.75rem;
+      border: 1px solid var(--border-main);
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      min-height: 2.4rem;
+    }
+
+    #event-log {
+      margin-top: 1rem;
+      padding: 0.6rem 0.8rem;
+      background: var(--bg-panel);
+      border-radius: 0.75rem;
+      border: 1px solid var(--border-main);
+      font-size: 0.75rem;
+      max-height: 260px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      background: rgba(22, 163, 74, 0.09);
+      color: #6ee7b7;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    @media (max-width: 768px) {
       .grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-        gap: 1.5rem;
-        margin-top: 2rem;
+        grid-template-columns: minmax(0, 1fr);
       }
+    }
 
-      .card {
-        background: radial-gradient(circle at top left, #111827, #020617);
-        border-radius: 12px;
-        padding: 1rem 1.25rem;
-        border: 1px solid #111827;
-        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.9);
-      }
+    #ai-settings-summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.35rem 0.75rem;
+    }
 
-      .card h2 {
-        font-size: 1rem;
-        margin: 0 0 0.5rem;
-      }
+    #ai-settings-summary[hidden] {
+      display: none !important;
+    }
 
-      label {
-        display: block;
-        font-size: 0.8rem;
-        margin-top: 0.75rem;
-        margin-bottom: 0.25rem;
-        color: #9ca3af;
-      }
+    #ai-settings-body[hidden] {
+      display: none !important;
+    }
 
-      input,
-      select,
-      textarea {
-        width: 100%;
-        padding: 0.45rem 0.55rem;
-        border-radius: 0.45rem;
-        border: 1px solid #1f2937;
-        background: #020617;
-        color: #f9fafb;
-        font-family: inherit;
-        font-size: 0.85rem;
-        box-sizing: border-box;
-      }
+    .ai-settings-header-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.35rem 0.75rem;
+      margin-bottom: 0.25rem;
+    }
 
-      input:focus,
-      select:focus {
-        outline: 2px solid #4f46e5;
-        outline-offset: 1px;
-        border-color: transparent;
-      }
+    .ai-settings-header-row h2 {
+      margin: 0;
+    }
 
-      textarea:disabled {
-        opacity: 0.65;
-        cursor: not-allowed;
-      }
+    #g2-connection-body[hidden],
+    #g2-connection-connected[hidden] {
+      display: none !important;
+    }
 
-      #research-refinement .btn:disabled {
-        opacity: 0.55;
-        cursor: not-allowed;
-      }
+    #phone-audio-start-banner {
+      margin-top: 1.25rem;
+    }
 
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.35rem;
-        padding: 0.5rem 0.9rem;
-        border-radius: 999px;
-        border: none;
-        cursor: pointer;
-        font-size: 0.85rem;
-        font-weight: 500;
-        font-family: inherit;
-        transition: background 120ms ease, transform 60ms ease, box-shadow 120ms ease;
-      }
+    #phone-audio-start-banner[hidden] {
+      display: none !important;
+    }
 
-      .btn-primary {
-        background: linear-gradient(to right, #6366f1, #4f46e5);
-        color: white;
-        box-shadow: 0 12px 25px rgba(79, 70, 229, 0.6);
-      }
+    #phone-audio {
+      grid-column: 1 / -1;
+    }
 
-      .btn-primary:hover {
-        background: linear-gradient(to right, #818cf8, #6366f1);
-        transform: translateY(-1px);
-        box-shadow: 0 18px 38px rgba(79, 70, 229, 0.75);
-      }
+    #audio-device-info {
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.6rem;
+      border-radius: 0.45rem;
+      border: 1px solid var(--border-soft);
+      background: var(--bg-panel);
+      font-size: 0.72rem;
+      line-height: 1.35;
+      max-height: 140px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
 
-      .btn-primary:active {
-        transform: translateY(0);
-        box-shadow: 0 10px 20px rgba(79, 70, 229, 0.6);
-      }
+    select:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
 
-      .btn-ghost {
-        background: transparent;
-        color: #e5e7eb;
-        border: 1px solid #1f2937;
-      }
+    .research-manage-list {
+      list-style: none;
+      padding: 0;
+      margin: 0.35rem 0 0.25rem;
+      max-height: 200px;
+      overflow-y: auto;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border-soft);
+      background: var(--bg-panel);
+    }
 
-      .btn-ghost:hover {
-        background: rgba(31, 41, 55, 0.8);
-      }
+    .research-manage-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.4rem 0.55rem;
+      font-size: 0.8rem;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.8);
+    }
 
-      .btn-row {
-        display: flex;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-      }
+    .research-manage-list li:last-child {
+      border-bottom: none;
+    }
 
-      .topic-list {
-        list-style: none;
-        padding: 0;
-        margin: 0.35rem 0 0.25rem;
-        max-height: 120px;
-        overflow-y: auto;
-        border-radius: 0.5rem;
-        border: 1px solid #1f2937;
-        background: #020617;
-      }
+    .research-manage-list .research-item-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
-      .topic-list li {
-        padding: 0.35rem 0.55rem;
-        font-size: 0.8rem;
-        border-bottom: 1px solid rgba(15, 23, 42, 0.8);
-        cursor: pointer;
-      }
+    .research-manage-list .research-delete {
+      flex-shrink: 0;
+      font-size: 0.72rem;
+      padding: 0.28rem 0.65rem;
+    }
+  </style>
+</head>
 
-      .topic-list li:last-child {
-        border-bottom: none;
-      }
-
-      .topic-list li.selected {
-        background: rgba(79, 70, 229, 0.35);
-      }
-
-      #status {
-        margin-top: 1rem;
-        padding: 0.75rem 0.9rem;
-        background: #020617;
-        border-radius: 0.75rem;
-        border: 1px solid #111827;
-        font-size: 0.8rem;
-        white-space: pre-wrap;
-        min-height: 2.4rem;
-      }
-
-      #event-log {
-        margin-top: 1rem;
-        padding: 0.6rem 0.8rem;
-        background: #020617;
-        border-radius: 0.75rem;
-        border: 1px solid #111827;
-        font-size: 0.75rem;
-        max-height: 260px;
-        overflow-y: auto;
-        white-space: pre-wrap;
-      }
-
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.1rem 0.45rem;
-        border-radius: 999px;
-        font-size: 0.7rem;
-        background: rgba(22, 163, 74, 0.09);
-        color: #6ee7b7;
-        border: 1px solid rgba(34, 197, 94, 0.3);
-      }
-
-      @media (max-width: 768px) {
-        .grid {
-          grid-template-columns: minmax(0, 1fr);
-        }
-      }
-
-      #ai-settings-summary {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.35rem 0.75rem;
-      }
-
-      #ai-settings-summary[hidden] {
-        display: none !important;
-      }
-
-      #ai-settings-body[hidden] {
-        display: none !important;
-      }
-
-      .ai-settings-header-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.35rem 0.75rem;
-        margin-bottom: 0.25rem;
-      }
-
-      .ai-settings-header-row h2 {
-        margin: 0;
-      }
-
-      #g2-connection-body[hidden],
-      #g2-connection-connected[hidden] {
-        display: none !important;
-      }
-
-      #phone-audio-start-banner {
-        margin-top: 1.25rem;
-      }
-
-      #phone-audio-start-banner[hidden] {
-        display: none !important;
-      }
-
-      #phone-audio {
-        grid-column: 1 / -1;
-      }
-
-      #audio-device-info {
-        margin-top: 0.5rem;
-        padding: 0.5rem 0.6rem;
-        border-radius: 0.45rem;
-        border: 1px solid #1f2937;
-        background: #020617;
-        font-size: 0.72rem;
-        line-height: 1.35;
-        max-height: 140px;
-        overflow-y: auto;
-        white-space: pre-wrap;
-        word-break: break-word;
-      }
-
-      select:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-      .research-manage-list {
-        list-style: none;
-        padding: 0;
-        margin: 0.35rem 0 0.25rem;
-        max-height: 200px;
-        overflow-y: auto;
-        border-radius: 0.5rem;
-        border: 1px solid #1f2937;
-        background: #020617;
-      }
-
-      .research-manage-list li {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        padding: 0.4rem 0.55rem;
-        font-size: 0.8rem;
-        border-bottom: 1px solid rgba(15, 23, 42, 0.8);
-      }
-
-      .research-manage-list li:last-child {
-        border-bottom: none;
-      }
-
-      .research-manage-list .research-item-title {
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .research-manage-list .research-delete {
-        flex-shrink: 0;
-        font-size: 0.72rem;
-        padding: 0.28rem 0.65rem;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app">
-      <header>
+<body>
+  <div id="phone-loading-overlay" hidden>
+    <div class="phone-loading-card">
+      <strong id="phone-loading-overlay-text">Loading configuration…</strong>
+    </div>
+  </div>
+  <div id="app">
+    <header>
+      <div class="topbar">
         <h1>Article Publisher <span class="app-version">%BUILD_VERSION%</span></h1>
-        <p class="muted">
-          Connect your G2 glasses, configure Gemini + search grounding, ElevenLabs,OpenAI and WordPress, then drive the whole publishing flow from the
-          glasses.
-        </p>
-      </header>
+        <button id="hamburger-open" type="button" class="hamburger-btn" aria-label="Open navigation menu">☰</button>
+      </div>
+    </header>
 
+    <div id="hamburger-overlay" class="hamburger-overlay" hidden></div>
+    <aside id="hamburger-menu" class="hamburger-menu" hidden>
+      <h2>Menu</h2>
+      <div class="btn-row" style="margin: 0 0 0.7rem">
+        <button type="button" id="theme-toggle" class="btn btn-ghost" style="width: 100%">
+          Switch to light theme
+        </button>
+      </div>
+      <ul class="menu-list">
+        <li><button type="button" class="menu-link active" data-page-target="page-dashboard">Dashboard</button></li>
+        <li><button type="button" class="menu-link" data-page-target="page-work-status">Work status</button></li>
+        <li><button type="button" class="menu-link" data-page-target="page-help-log">Help &amp; log</button></li>
+        <li><button type="button" class="menu-link" data-page-target="page-settings">Settings</button></li>
+      </ul>
+    </aside>
+
+    <section id="page-dashboard" class="app-page">
       <section class="card" id="phone-audio-start-banner">
         <h2>Read aloud on this phone</h2>
         <p class="muted" style="margin: 0 0 0.75rem">
-          <strong>Read aloud</strong> from the glasses plays on this device. On iPhone and many Android WebViews you must
+          <strong>Read aloud</strong> from the glasses plays on this device. On iPhone and many Android WebViews you
+          must
           unlock audio with a tap here first (same action as in <strong>Phone audio</strong> below).
         </p>
         <div class="btn-row">
@@ -337,105 +507,131 @@
           </button>
         </div>
       </section>
+<p/>
+      <section class="card" id="status-card">
+        <pre id="status">Booting…</pre>
+      </section>
+<p/>
+      <section class="card" id="research-refinement">
+        <h2>Prompt Research refinement</h2>
+        <div id="research-status" class="muted" style="margin-bottom: 0.5rem;">
+          No research selected on glasses.
+        </div>
+        <label for="prompt-text">Prompt to update current research</label>
+        <textarea id="prompt-text" rows="3" disabled
+          placeholder="Example: Make the tone more optimistic and add a short call-to-action at the end."></textarea>
+        <div class="btn-row">
+          <button id="prompt-submit" class="btn btn-primary" type="button" disabled>
+            Apply prompt to research
+          </button>
+          <button id="use-transcript" class="btn btn-ghost" type="button" disabled>
+            Use last voice transcript
+          </button>
+        </div>
+      </section>
+    </section>
 
-      <div class="grid">
-        <pre id="status">Booting…</pre>               
+    <section id="page-work-status" class="app-page" hidden>
 
-        <section class="card" id="research-refinement">
-          <h2>Prompt Research refinement</h2>
+      <section class="card" id="prompt-topics">
+        <h2>Prompt Topics</h2>
+        <p class="muted">Manage the list of topics that will be available when starting new research on the glasses.
+        </p>
+        <label for="new-topic">Add topic</label>
+        <input id="new-topic" type="text" placeholder="e.g. Artificial Intelligence, Quantum computing…" />
+        <ul id="topics-list" class="topic-list"></ul>
+        <div class="btn-row">
+          <button id="topics-add" class="btn btn-primary">Add topic</button>
+          <button id="topics-delete" class="btn btn-ghost">Delete selected</button>
+          <button id="topics-save" class="btn btn-ghost">Save list</button>
+        </div>
+      </section>
+<p/>
+      <section class="card" id="draft-researches-phone">
+        <div class="ai-settings-header-row">
+          <h2>Draft researches</h2>
+          <button type="button" id="research-lists-refresh" class="btn btn-ghost">Refresh</button>
+        </div>
+        <p class="muted">
+          Drafts appear when you start or continue article research on the glasses. Delete removes the draft from
+          shared
+          storage (same data as “Continue Old Article Research”).
+        </p>
+        <ul id="draft-researches-list" class="research-manage-list"></ul>
+        <p id="draft-researches-empty" class="muted" hidden style="margin: 0.35rem 0 0">No drafts.</p>
+      </section>
+<p/>
+      <section class="card" id="ready-researches-phone">
+        <h2>Ready for publishing</h2>
+        <p class="muted">
+          Items marked ready on the glasses. Delete removes them from the queue (same list as “Review Ready for
+          Publishing”).
+        </p>
+        <ul id="ready-researches-list" class="research-manage-list"></ul>
+        <p id="ready-researches-empty" class="muted" hidden style="margin: 0.35rem 0 0">Nothing ready yet.</p>
+      </section>
+    </section>
 
-          <div id="research-status" class="muted" style="margin-bottom: 0.5rem;">
-            No research selected on glasses.
-          </div>
+    <section id="page-help-log" class="app-page" hidden>
+      <section class="card" id="article-publisher">
+        <h2>How to use Article Publisher</h2>
+        <p class="muted">
+          <a href="https://ivan.vlaevski.com/article-publisher/" target="_blank" rel="noopener noreferrer">Article
+            Publisher usage article at Ivan Vlaevski blog</a>
+        </p>
+      </section>
+      <pre id="event-log"></pre>
+    </section>
 
-          <label for="prompt-text">Prompt to update current research</label>
-          <textarea
-            id="prompt-text"
-            rows="3"
-            disabled
-            placeholder="Example: Make the tone more optimistic and add a short call-to-action at the end."
-          ></textarea>
-
+    <section id="page-settings" class="app-page" hidden>
+      <section class="card" id="g2-connection">
+        <div id="g2-connection-body">
+          <h2>G2 Connection</h2>
+          <p class="muted">Starts the Even Hub bridge and boots the glasses UI.</p>
           <div class="btn-row">
-            <button id="prompt-submit" class="btn btn-primary" type="button" disabled>
-              Apply prompt to research
-            </button>
-            <button id="use-transcript" class="btn btn-ghost" type="button" disabled>
-              Use last voice transcript
+            <button id="connectBtn" class="btn btn-primary">
+              Connect glasses
             </button>
           </div>
-        </section>
-
-        <section class="card" id="prompt-topics">
-          <h2>Prompt Topics</h2>
-          <p class="muted">Manage the list of topics that will be available when starting new research on the glasses.</p>
-
-          <label for="new-topic">Add topic</label>
-          <input id="new-topic" type="text" placeholder="e.g. Artificial Intelligence, Quantum computing…" />
-
-          <ul id="topics-list" class="topic-list"></ul>
-
-          <div class="btn-row">
-            <button id="topics-add" class="btn btn-primary">Add topic</button>
-            <button id="topics-delete" class="btn btn-ghost">Delete selected</button>
-            <button id="topics-save" class="btn btn-ghost">Save list</button>
+          <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #6b7280;">
+            <span class="badge">Tip</span>
+            &nbsp;On the glasses, use tap, double-tap and swipe gestures to navigate menus.
           </div>
-        </section>
+        </div>
+        <p id="g2-connection-connected" class="muted" hidden style="margin: 0">
+          Bridge connected — use the glasses main menu.
+        </p>
+      </section>
+<p/>
+      <section class="card" id="ai-settings">
+        <div id="ai-settings-summary" class="ai-settings-summary" hidden>
+          <p class="muted" style="margin: 0">
+            AI &amp; publishing settings are filled in. Expand to edit.
+          </p>
+          <button type="button" id="ai-settings-show" class="btn btn-ghost">Show settings</button>
+        </div>
 
-        <section class="card" id="draft-researches-phone">
+        <div id="ai-settings-body">
           <div class="ai-settings-header-row">
-            <h2>Draft researches</h2>
-            <button type="button" id="research-lists-refresh" class="btn btn-ghost">Refresh</button>
+            <h2>AI &amp; Publishing Settings</h2>
+            <button type="button" id="ai-settings-hide" class="btn btn-ghost" hidden>Hide</button>
           </div>
-          <p class="muted">
-            Drafts appear when you start or continue article research on the glasses. Delete removes the draft from shared
-            storage (same data as “Continue Old Article Research”).
-          </p>
-          <ul id="draft-researches-list" class="research-manage-list"></ul>
-          <p id="draft-researches-empty" class="muted" hidden style="margin: 0.35rem 0 0">No drafts.</p>
-        </section>
-
-        <section class="card" id="ready-researches-phone">
-          <h2>Ready for publishing</h2>
-          <p class="muted">
-            Items marked ready on the glasses. Delete removes them from the queue (same list as “Review Ready for
-            Publishing”).
-          </p>
-          <ul id="ready-researches-list" class="research-manage-list"></ul>
-          <p id="ready-researches-empty" class="muted" hidden style="margin: 0.35rem 0 0">Nothing ready yet.</p>
-        </section>
-
-        <section class="card" id="ai-settings">
-          <div id="ai-settings-summary" class="ai-settings-summary" hidden>
-            <p class="muted" style="margin: 0">
-              AI &amp; publishing settings are filled in. Expand to edit.
-            </p>
-            <button type="button" id="ai-settings-show" class="btn btn-ghost">Show settings</button>
-          </div>
-
-          <div id="ai-settings-body">
-            <div class="ai-settings-header-row">
-              <h2>AI &amp; Publishing Settings</h2>
-              <button type="button" id="ai-settings-hide" class="btn btn-ghost" hidden>Hide</button>
-            </div>
-            <p class="muted">Stored only on this phone, used for API calls from this WebView.</p>
+          <p class="muted">Stored only on this phone, used for API calls from this WebView.</p>
 
           <label for="google-generative-key">Google Gemini API key</label>
           <input id="google-generative-key" type="password" autocomplete="off" />
           <p class="muted" style="margin-top: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
             Used for “new research” topic news (Gemini + search grounding). Get a key at
-            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"
-              >Google AI Studio</a
-            >.
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI
+              Studio</a>.
           </p>
 
           <label for="openai-key">OpenAI API key</label>
           <input id="openai-key" type="password" autocomplete="off" />
           <p class="muted" style="margin-top: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
             Used for “research” and “refinement” voice prompts. Get a key at
-            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer"
-              >openai.com/api-keys</a
-            >.
+            <a href="https://platform.openai.com/api-keys" target="_blank"
+              rel="noopener noreferrer">openai.com/api-keys</a>.
           </p>
 
           <label for="openai-model">OpenAI model</label>
@@ -445,9 +641,8 @@
           <input id="elevenlabs-key" type="password" autocomplete="off" />
           <p class="muted" style="margin-top: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
             Used for voice synthesis. Get a key at
-            <a href="https://elevenlabs.io/app/api/api-keys" target="_blank" rel="noopener noreferrer"
-              >elevenlabs.io/app/api/api-keys</a
-            >.
+            <a href="https://elevenlabs.io/app/api/api-keys" target="_blank"
+              rel="noopener noreferrer">elevenlabs.io/app/api/api-keys</a>.
           </p>
 
           <label for="wp-url">WordPress base URL</label>
@@ -462,79 +657,124 @@
           <div class="btn-row">
             <button id="save-settings" class="btn btn-primary">Save settings</button>
           </div>
-          </div>
-        </section>
+        </div>
+      </section>
+<p/>
+      <section class="card" id="phone-audio">
+        <h2>Phone audio (read aloud)</h2>
+        <p class="muted">
+          <strong>Read aloud</strong> plays ElevenLabs MP3 on <strong>this phone</strong> (built-in speaker,
+          wired headset, or Bluetooth). Browsers often block sound until you tap this page.
+          <strong>G2 voice refinement</strong> uses the <strong>glasses microphone</strong> (Even bridge), not the
+          phone mic — input list below is for reference and future use.
+        </p>
+        <div class="btn-row" style="margin-top: 0.75rem">
+          <button type="button" id="audio-unlock-test" class="btn btn-primary">
+            Unlock &amp; test phone speaker
+          </button>
+          <button type="button" id="audio-refresh-devices" class="btn btn-ghost">Refresh device list</button>
+        </div>
+        <p class="muted" style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.78rem">
+          <strong>Required on iPhone / many Android WebViews:</strong> tap <strong>Unlock &amp; test</strong> once on
+          this phone before using <strong>Read aloud</strong> on the glasses. Browsers only allow
+          <code>audio.play()</code> after a user tap; this page reuses one player so later lines work without
+          tapping again.
+        </p>
 
-        <section class="card" id="g2-connection">
-          <div id="g2-connection-body">
-            <h2>G2 Connection</h2>
-            <p class="muted">Starts the Even Hub bridge and boots the glasses UI.</p>
-            <div class="btn-row">
-              <button id="connectBtn" class="btn btn-primary">
-                Connect glasses
-              </button>
-            </div>
-            <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #6b7280;">
-              <span class="badge">Tip</span>
-              &nbsp;On the glasses, use tap, double-tap and swipe gestures to navigate menus.
-            </div>
-          </div>
-          <p id="g2-connection-connected" class="muted" hidden style="margin: 0">
-            Bridge connected — use the glasses main menu.
-          </p>
-        </section> 
+        <label for="audio-output-select">Playback output (speaker / BT)</label>
+        <select id="audio-output-select" aria-describedby="audio-output-hint"></select>
+        <p id="audio-output-hint" class="muted" style="margin-top: 0.35rem; margin-bottom: 0; font-size: 0.75rem">
+          <span id="audio-sink-support-note"></span>
+          When supported (e.g. Chrome on Android), the next read-aloud clip uses this sink.
+          iOS Safari uses the system route only.
+        </p>
 
-        <section class="card" id="phone-audio">
-          <h2>Phone audio (read aloud)</h2>
-          <p class="muted">
-            <strong>Read aloud</strong> plays ElevenLabs MP3 on <strong>this phone</strong> (built-in speaker,
-            wired headset, or Bluetooth). Browsers often block sound until you tap this page.
-            <strong>G2 voice refinement</strong> uses the <strong>glasses microphone</strong> (Even bridge), not the
-            phone mic — input list below is for reference and future use.
-          </p>
-          <div class="btn-row" style="margin-top: 0.75rem">
-            <button type="button" id="audio-unlock-test" class="btn btn-primary">
-              Unlock &amp; test phone speaker
-            </button>
-            <button type="button" id="audio-refresh-devices" class="btn btn-ghost">Refresh device list</button>
-          </div>
-          <p class="muted" style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.78rem">
-            <strong>Required on iPhone / many Android WebViews:</strong> tap <strong>Unlock &amp; test</strong> once on
-            this phone before using <strong>Read aloud</strong> on the glasses. Browsers only allow
-            <code>audio.play()</code> after a user tap; this page reuses one player so later lines work without
-            tapping again.
-          </p>
+        <label for="audio-input-select">Microphones on this device (informational)</label>
+        <select id="audio-input-select" aria-describedby="audio-input-hint"></select>
+        <p id="audio-input-hint" class="muted" style="margin-top: 0.35rem; margin-bottom: 0; font-size: 0.75rem">
+          Not used for STT in this app (G2 PCM → ElevenLabs). Saved for visibility / future features.
+        </p>
 
-          <label for="audio-output-select">Playback output (speaker / BT)</label>
-          <select id="audio-output-select" aria-describedby="audio-output-hint"></select>
-          <p id="audio-output-hint" class="muted" style="margin-top: 0.35rem; margin-bottom: 0; font-size: 0.75rem">
-            <span id="audio-sink-support-note"></span>
-            When supported (e.g. Chrome on Android), the next read-aloud clip uses this sink.
-            iOS Safari uses the system route only.
-          </p>
+        <p class="muted" style="margin-top: 0.75rem; margin-bottom: 0.25rem; font-size: 0.8rem">Detected devices</p>
+        <div id="audio-device-info">Loading…</div>
+      </section>
+    </section>
+  </div>
 
-          <label for="audio-input-select">Microphones on this device (informational)</label>
-          <select id="audio-input-select" aria-describedby="audio-input-hint"></select>
-          <p id="audio-input-hint" class="muted" style="margin-top: 0.35rem; margin-bottom: 0; font-size: 0.75rem">
-            Not used for STT in this app (G2 PCM → ElevenLabs). Saved for visibility / future features.
-          </p>
+  <script>
+    const menuButton = document.getElementById('hamburger-open');
+    const menu = document.getElementById('hamburger-menu');
+    const overlay = document.getElementById('hamburger-overlay');
+    const themeToggle = document.getElementById('theme-toggle');
+    const pageSections = Array.from(document.querySelectorAll('.app-page'));
+    const menuLinks = Array.from(document.querySelectorAll('.menu-link'));
+    const THEME_STORAGE_KEY = 'article-publisher:theme';
 
-          <p class="muted" style="margin-top: 0.75rem; margin-bottom: 0.25rem; font-size: 0.8rem">Detected devices</p>
-          <div id="audio-device-info">Loading…</div>
-        </section>
+    const openMenu = () => {
+      menu?.removeAttribute('hidden');
+      overlay?.removeAttribute('hidden');
+      menu?.classList.add('open');
+      overlay?.classList.add('open');
+    };
 
-        <section class="card" id="article-publisher">
-          <h2>How to use Article Publisher</h2>
-          <p class="muted">
-            <a href="https://ivan.vlaevski.com/article-publisher/" target="_blank" rel="noopener noreferrer">Article Publisher usage article at Ivan Vlaevski blog</a>
-          </p>
-        </section>
-      </div>
-      
-      <pre id="event-log"></pre>
-    </div>
+    const closeMenu = () => {
+      menu?.classList.remove('open');
+      overlay?.classList.remove('open');
+      window.setTimeout(() => {
+        menu?.setAttribute('hidden', '');
+        overlay?.setAttribute('hidden', '');
+      }, 150);
+    };
 
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+    const showPage = (pageId) => {
+      pageSections.forEach((section) => {
+        if (section.id === pageId) section.removeAttribute('hidden');
+        else section.setAttribute('hidden', '');
+      });
+      menuLinks.forEach((link) => {
+        const isActive = link.getAttribute('data-page-target') === pageId;
+        link.classList.toggle('active', isActive);
+      });
+    };
+
+    const applyTheme = (theme) => {
+      const light = theme === 'light';
+      document.body.classList.toggle('theme-light', light);
+      if (themeToggle) {
+        themeToggle.textContent = light ? 'Switch to dark theme' : 'Switch to light theme';
+      }
+    };
+
+    const loadTheme = () => {
+      try {
+        const stored = localStorage.getItem(THEME_STORAGE_KEY);
+        applyTheme(stored === 'light' ? 'light' : 'dark');
+      } catch {
+        applyTheme('dark');
+      }
+    };
+
+    menuButton?.addEventListener('click', openMenu);
+    overlay?.addEventListener('click', closeMenu);
+    themeToggle?.addEventListener('click', () => {
+      const nextTheme = document.body.classList.contains('theme-light') ? 'dark' : 'light';
+      applyTheme(nextTheme);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+      } catch {
+        /* ignore storage errors */
+      }
+    });
+    menuLinks.forEach((link) => {
+      link.addEventListener('click', () => {
+        const target = link.getAttribute('data-page-target');
+        if (target) showPage(target);
+        closeMenu();
+      });
+    });
+    loadTheme();
+  </script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
 </html>
-

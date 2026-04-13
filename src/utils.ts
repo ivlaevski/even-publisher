@@ -1,5 +1,28 @@
+import type { EvenAppBridge } from '@evenrealities/even_hub_sdk';
+
 const STATUS_ID = 'status';
 const LOG_ID = 'event-log';
+
+async function getStorageValue(bridge: EvenAppBridge | null, key: string): Promise<string> {
+  if (bridge) return (await bridge.getLocalStorage(key)) ?? '';
+  try {
+    return localStorage.getItem(key) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+async function setStorageValue(bridge: EvenAppBridge | null, key: string, value: string): Promise<void> {
+  if (bridge) {
+    await bridge.setLocalStorage(key, value);
+    return;
+  }
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore storage errors */
+  }
+}
 
 export function setStatus(message: string): void {
   // eslint-disable-next-line no-console
@@ -82,7 +105,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label = 'operati
   });
 }
 
-export function loadConfigFromLocalStorage(): {
+export async function loadConfigFromLocalStorage(bridge: EvenAppBridge | null): Promise<{
   googleGenerativeApiKey: string;
   openAiApiKey: string;
   openAiModel: string;
@@ -90,20 +113,38 @@ export function loadConfigFromLocalStorage(): {
   wordpressUsername: string;
   wordpressPassword: string;
   elevenLabsApiKey: string;
-} {
+}> {
+  const [
+    googleGenerativeApiKey,
+    openAiApiKey,
+    openAiModel,
+    wordpressBaseUrl,
+    wordpressUsername,
+    wordpressPassword,
+    elevenLabsApiKey,
+  ] = await Promise.all([
+    getStorageValue(bridge, 'article-publisher:google-generative-key'),
+    getStorageValue(bridge, 'article-publisher:openai-key'),
+    getStorageValue(bridge, 'article-publisher:openai-model'),
+    getStorageValue(bridge, 'article-publisher:wp-url'),
+    getStorageValue(bridge, 'article-publisher:wp-username'),
+    getStorageValue(bridge, 'article-publisher:wp-password'),
+    getStorageValue(bridge, 'article-publisher:elevenlabs-key'),
+  ]);
   return {
-    googleGenerativeApiKey:
-      localStorage.getItem('article-publisher:google-generative-key') ?? '',
-    openAiApiKey: localStorage.getItem('article-publisher:openai-key') ?? '',
-    openAiModel: localStorage.getItem('article-publisher:openai-model') ?? 'gpt-4.1-mini',
-    wordpressBaseUrl: localStorage.getItem('article-publisher:wp-url') ?? '',
-    wordpressUsername: localStorage.getItem('article-publisher:wp-username') ?? '',
-    wordpressPassword: localStorage.getItem('article-publisher:wp-password') ?? '',
-    elevenLabsApiKey: localStorage.getItem('article-publisher:elevenlabs-key') ?? '',
+    googleGenerativeApiKey,
+    openAiApiKey,
+    openAiModel: openAiModel || 'gpt-4.1-mini',
+    wordpressBaseUrl,
+    wordpressUsername,
+    wordpressPassword,
+    elevenLabsApiKey,
   };
 }
 
-export function saveConfigToLocalStorage(config: {
+export async function saveConfigToLocalStorage(
+  bridge: EvenAppBridge | null,
+  config: {
   googleGenerativeApiKey: string;
   openAiApiKey: string;
   openAiModel: string;
@@ -111,28 +152,34 @@ export function saveConfigToLocalStorage(config: {
   wordpressUsername: string;
   wordpressPassword: string;
   elevenLabsApiKey: string;
-}): void {
-  localStorage.setItem('article-publisher:google-generative-key', config.googleGenerativeApiKey.trim());
-  localStorage.setItem('article-publisher:openai-key', config.openAiApiKey.trim());
-  localStorage.setItem('article-publisher:openai-model', config.openAiModel.trim());
-  localStorage.setItem('article-publisher:wp-url', config.wordpressBaseUrl.trim());
-  localStorage.setItem('article-publisher:wp-username', config.wordpressUsername.trim());
-  localStorage.setItem('article-publisher:wp-password', config.wordpressPassword.trim());
-  localStorage.setItem('article-publisher:elevenlabs-key', config.elevenLabsApiKey.trim());
+},
+): Promise<void> {
+  await Promise.all([
+    setStorageValue(bridge, 'article-publisher:google-generative-key', config.googleGenerativeApiKey.trim()),
+    setStorageValue(bridge, 'article-publisher:openai-key', config.openAiApiKey.trim()),
+    setStorageValue(bridge, 'article-publisher:openai-model', config.openAiModel.trim()),
+    setStorageValue(bridge, 'article-publisher:wp-url', config.wordpressBaseUrl.trim()),
+    setStorageValue(bridge, 'article-publisher:wp-username', config.wordpressUsername.trim()),
+    setStorageValue(bridge, 'article-publisher:wp-password', config.wordpressPassword.trim()),
+    setStorageValue(bridge, 'article-publisher:elevenlabs-key', config.elevenLabsApiKey.trim()),
+  ]);
 }
 
-export function loadTopicsFromLocalStorage(): string[] {
-  const raw = localStorage.getItem('article-publisher:topics') ?? '';
+export async function loadTopicsFromLocalStorage(bridge: EvenAppBridge | null): Promise<string[]> {
+  const raw = await getStorageValue(bridge, 'article-publisher:topics');
   return raw
     .split('\n')
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
 }
 
-export function saveTopicsToLocalStorage(topics: string[]): void {
+export async function saveTopicsToLocalStorage(
+  bridge: EvenAppBridge | null,
+  topics: string[],
+): Promise<void> {
   const normalized = topics.map((value) => value.trim()).filter((value) => value.length > 0);
   const payload = normalized.join('\n');
-  localStorage.setItem('article-publisher:topics', payload);
+  await setStorageValue(bridge, 'article-publisher:topics', payload);
 }
 
 export function clamp(value: number, min: number, max: number): number {

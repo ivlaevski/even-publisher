@@ -1,3 +1,5 @@
+import type { EvenAppBridge } from '@evenrealities/even_hub_sdk';
+
 /** Playback sink for `HTMLAudioElement` (read aloud on the phone). Empty = OS default. */
 export const PHONE_AUDIO_OUTPUT_KEY = 'article-publisher:phone-audio-output-id';
 
@@ -7,6 +9,16 @@ export const PHONE_AUDIO_INPUT_KEY = 'article-publisher:phone-audio-input-id';
 /** Single element reused for read-aloud so iOS/WebKit allows `play()` after one in-gesture prime. */
 let sharedPlaybackAudio: HTMLAudioElement | null = null;
 let sharedPlaybackBlobUrl: string | null = null;
+let phoneAudioStorageBridge: EvenAppBridge | null = null;
+
+async function getStorageValue(key: string): Promise<string> {
+  if (phoneAudioStorageBridge) return (await phoneAudioStorageBridge.getLocalStorage(key)) ?? '';
+  try {
+    return localStorage.getItem(key) ?? '';
+  } catch {
+    return '';
+  }
+}
 
 /** Set when `primeSharedPlaybackAudioFromUserGesture` successfully plays the silent clip (session only). */
 let phonePlaybackPrimedThisSession = false;
@@ -14,6 +26,10 @@ let phonePlaybackPrimedThisSession = false;
 /** Read-aloud requires this at least once per page load (typically via “Unlock & test phone speaker”). */
 export function hasPhonePlaybackPrimedThisSession(): boolean {
   return phonePlaybackPrimedThisSession;
+}
+
+export function setPhoneAudioStorageBridge(bridge: EvenAppBridge | null): void {
+  phoneAudioStorageBridge = bridge;
 }
 
 /** ~12ms of 8 kHz silence — valid WAV for `HTMLAudioElement.play()` during user gesture. */
@@ -77,12 +93,12 @@ export function phoneAudioOutputSupportsSink(): boolean {
   );
 }
 
-export function applyPhoneAudioOutput(audio: HTMLAudioElement): void {
-  const id = localStorage.getItem(PHONE_AUDIO_OUTPUT_KEY)?.trim();
+export async function applyPhoneAudioOutput(audio: HTMLAudioElement): Promise<void> {
+  const id = (await getStorageValue(PHONE_AUDIO_OUTPUT_KEY)).trim();
   if (!id) return;
   const el = audio as HTMLAudioElement & { setSinkId?: (sinkId: string) => Promise<void> };
   if (typeof el.setSinkId !== 'function') return;
-  void el.setSinkId(id).catch(() => {
+  await el.setSinkId(id).catch(() => {
     /* swallow — wrong id or policy */
   });
 }
@@ -93,7 +109,7 @@ export function getSharedPlaybackAudio(): HTMLAudioElement {
     sharedPlaybackAudio.preload = 'auto';
     sharedPlaybackAudio.setAttribute('playsinline', 'true');
     sharedPlaybackAudio.setAttribute('webkit-playsinline', 'true');
-    applyPhoneAudioOutput(sharedPlaybackAudio);
+    void applyPhoneAudioOutput(sharedPlaybackAudio);
   }
   return sharedPlaybackAudio;
 }
@@ -116,7 +132,7 @@ export function prepareSharedPlaybackFromMp3(arrayBuffer: ArrayBuffer): HTMLAudi
   const a = getSharedPlaybackAudio();
   a.volume = 1;
   a.src = url;
-  applyPhoneAudioOutput(a);
+  void applyPhoneAudioOutput(a);
   return a;
 }
 
@@ -126,7 +142,7 @@ export function prepareSharedPlaybackFromMp3(arrayBuffer: ArrayBuffer): HTMLAudi
  */
 export async function primeSharedPlaybackAudioFromUserGesture(): Promise<boolean> {
   const a = getSharedPlaybackAudio();
-  applyPhoneAudioOutput(a);
+  await applyPhoneAudioOutput(a);
   try {
     revokeSharedPlaybackBlobUrl();
     a.pause();
