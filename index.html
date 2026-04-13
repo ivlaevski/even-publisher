@@ -745,6 +745,16 @@
       }
     };
 
+    const getCurrentTheme = () => (document.body.classList.contains('theme-light') ? 'light' : 'dark');
+
+    const persistThemeLocal = (theme) => {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, theme);
+      } catch {
+        /* ignore storage errors */
+      }
+    };
+
     const loadTheme = () => {
       try {
         const stored = localStorage.getItem(THEME_STORAGE_KEY);
@@ -757,13 +767,10 @@
     menuButton?.addEventListener('click', openMenu);
     overlay?.addEventListener('click', closeMenu);
     themeToggle?.addEventListener('click', () => {
-      const nextTheme = document.body.classList.contains('theme-light') ? 'dark' : 'light';
+      const nextTheme = getCurrentTheme() === 'light' ? 'dark' : 'light';
       applyTheme(nextTheme);
-      try {
-        localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-      } catch {
-        /* ignore storage errors */
-      }
+      persistThemeLocal(nextTheme);
+      window.dispatchEvent(new CustomEvent('article-publisher:theme-changed', { detail: { theme: nextTheme } }));
     });
     menuLinks.forEach((link) => {
       link.addEventListener('click', () => {
@@ -773,6 +780,12 @@
       });
     });
     loadTheme();
+    window.__articlePublisherSetTheme = (theme) => {
+      const normalized = theme === 'light' ? 'light' : 'dark';
+      applyTheme(normalized);
+      persistThemeLocal(normalized);
+    };
+    window.__articlePublisherGetTheme = () => getCurrentTheme();
   </script>
   <script type="module" src="/src/main.ts"></script>
 </body>

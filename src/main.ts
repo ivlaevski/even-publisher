@@ -54,6 +54,8 @@ async function setStorageValue(key: string, value: string): Promise<void> {
 declare global {
   interface Window {
     __evenPublisherRefreshResearchLists?: () => void;
+    __articlePublisherSetTheme?: (theme: string) => void;
+    __articlePublisherGetTheme?: () => string;
   }
 }
 
@@ -582,6 +584,12 @@ async function main() {
     else loadingOverlay.setAttribute('hidden', '');
   };
 
+  window.addEventListener('article-publisher:theme-changed', (ev: Event) => {
+    const custom = ev as CustomEvent<{ theme?: string }>;
+    const theme = custom.detail?.theme === 'light' ? 'light' : 'dark';
+    void setStorageValue('article-publisher:theme', theme);
+  });
+
   setLoading(true, 'Loading configuration…');
   await bootSettingsUi();
   bootReadAloudStartBanner();
@@ -603,6 +611,13 @@ async function main() {
       setPhoneAudioStorageBridge(bridge);
       setLoading(true, 'Loading bridge storage…');
       await refreshSettingsUiFromStorage?.();
+      const storedTheme = await getStorageValue('article-publisher:theme');
+      if (storedTheme) {
+        window.__articlePublisherSetTheme?.(storedTheme);
+      } else {
+        const currentTheme = window.__articlePublisherGetTheme?.() ?? 'dark';
+        await setStorageValue('article-publisher:theme', currentTheme);
+      }
 
       client = new EvenPublisherClient(bridge);
       await client.init();
