@@ -748,14 +748,14 @@ export class EvenPublisherClient {
       xPosition: 5,
       yPosition: 40,
       width: 560,
-      height: 130,
+      height: 180,
       borderWidth: 0,
       borderColor: 5,
       borderRadius: 6,
       paddingLength: 0,
       isEventCapture: 1,
       itemContainer: new ListItemContainerProperty({
-        itemCount: 3,
+        itemCount: 4,
         itemWidth: 550,
         isItemSelectBorderEn: 1,
         itemName: ['Start New Article Research', 'Continue Old Article Research', 'Review Ready for Publishing', 'Exit'],
@@ -832,7 +832,7 @@ export class EvenPublisherClient {
       return;
     }
 
-    const items = topics.map((topic, index) => this.sanitizeForDisplay(`${index + 1}. ${topic}`, 64));
+    const items = topics.map((topic, index) => this.sanitizeForDisplay(`${index + 1}. ${topic}`, 60));
     items.push('<- Back to main menu');
 
     const list = new ListContainerProperty({
@@ -949,7 +949,7 @@ export class EvenPublisherClient {
   private async renderResearchList(): Promise<void> {
     const drafts = this.getDraftResearches();
 
-    const items = drafts.map((r, idx) => this.sanitizeForDisplay(`${idx + 1}. ${r.title.slice(0, 60)}`, 64));
+    const items = drafts.map((r, idx) => this.sanitizeForDisplay(`${idx + 1}. ${r.title.slice(0, 60)}`, 60));
 
     if (items.length > 19) {
       items.splice(19, items.length - 19);
