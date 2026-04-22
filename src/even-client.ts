@@ -15,7 +15,6 @@ import {
   type EvenHubEvent,
   type EvenAppBridge,
 } from '@evenrealities/even_hub_sdk';
-
 import type { AiNewsItem, PublisherConfig, Research, ViewName } from './types';
 import {
   appendEventLog,
@@ -81,36 +80,7 @@ function formatElapsedMmSs(totalSeconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-/** Gesture type from a list row event only — avoids `textEvent` stealing `eventType` on list UIs. */
-function gestureFromListEvent(list: List_ItemEvent | undefined): OsEventTypeList | undefined {
-  if (!list) return undefined;
-  return OsEventTypeList.fromJson(list.eventType) ?? list.eventType;
-}
 
-/** Gesture type from a text container event only. */
-function gestureFromTextEvent(text: Text_ItemEvent | undefined): OsEventTypeList | undefined {
-  if (!text) return undefined;
-  return OsEventTypeList.fromJson(text.eventType) ?? text.eventType;
-}
-
-/** Prefer gesture from the main reading text surface so header/footer text events do not steal scroll. */
-function scrollGestureForResearchLikeTextEvent(event: EvenHubEvent): OsEventTypeList | undefined {
-  const te = event.textEvent;
-  if (te && (te.containerName === 'research' || te.containerName === 'readydetail')) {
-    return gestureFromTextEvent(te);
-  }
-  return undefined;
-}
-
-/** AI news list uses `aiitem0`…`aiitem2` text rows; prefer their event type for scroll (avoids merged-type noise). */
-function scrollGestureForAiNewsList(event: EvenHubEvent): OsEventTypeList | undefined {
-  const te = event.textEvent;
-  const name = te?.containerName ?? '';
-  if (te && /^aiitem[0-2]$/.test(name)) {
-    return gestureFromTextEvent(te);
-  }
-  return undefined;
-}
 
 type ResearchState = {
   researches: Research[];
@@ -174,25 +144,21 @@ export class EvenPublisherClient {
   /** Ignore spurious text events right after `textContainerUpgrade` on the transcript panel. */
   private voicePromptTranscriptUpgradeAtMs = 0;
 
-  /**
-   * Draft/ready readers call `textContainerUpgrade` twice per page (header + body). The host often
-   * echoes the same scroll direction twice in quick succession; drop the duplicate, not all rapid scrolls.
-   */
-  private lastPagedScrollDir: 'top' | 'bottom' | null = null;
-  private lastPagedScrollDirAtMs = 0;
-
   constructor(bridge: EvenAppBridge) {
     this.bridge = bridge;
   }
 
-  /** Ignore a second same-direction scroll within a few ms (firmware echo per text upgrade). */
-  private consumeIfNotDuplicateScrollEcho(dir: 'top' | 'bottom', windowMs: number): boolean {
+
+  private lastEvent: 'top' | 'bottom' | 'click' | 'double-click' | null = null;
+  private lastEventAtMs = 0;
+
+  private consumeIfNotDuplicateEventEcho(dir: 'top' | 'bottom' | 'click' | 'double-click', windowMs: number): boolean {
     const now = performance.now();
-    if (this.lastPagedScrollDir === dir && now - this.lastPagedScrollDirAtMs < windowMs) {
+    if (this.lastEvent === dir && now - this.lastEventAtMs < windowMs) {
       return false;
     }
-    this.lastPagedScrollDir = dir;
-    this.lastPagedScrollDirAtMs = now;
+    this.lastEvent = dir;
+    this.lastEventAtMs = now;
     return true;
   }
 
@@ -254,16 +220,6 @@ export class EvenPublisherClient {
     };
   }
 
-  private startupResultLabel(code: number): string {
-    const n = StartUpPageCreateResult.normalize(code);
-    if (n === StartUpPageCreateResult.success) return 'success';
-    if (n === StartUpPageCreateResult.invalid) return 'invalid';
-    if (n === StartUpPageCreateResult.oversize) return 'oversize';
-    if (n === StartUpPageCreateResult.outOfMemory) return 'outOfMemory';
-    return `raw=${code}`;
-  }
-
-
   private async ensureStartupUi(): Promise<void> {
     if (this.isStartupCreated) return;
 
@@ -302,28 +258,14 @@ export class EvenPublisherClient {
       textObject: [title, hint],
     });
 
-    //await new Promise((r) => setTimeout(r, 50));
-
     let result = await this.bridge.createStartUpPageContainer(container);
-
     if (result === 0) {
       this.isStartupCreated = true;
       return;
     }
-
     appendEventLog(
       `createStartUpPageContainer code=${result}; trying rebuildPageContainer fallback`,
     );
-
-    // const rebuilt = await this.applyRebuildPageContainer(
-    //   new RebuildPageContainer(container),
-    // );
-    // if (rebuilt) {
-    //   this.isStartupCreated = true;
-    //   appendEventLog('Startup UI ok via rebuildPageContainer fallback.');
-    // } else {
-    //   appendEventLog(`Failed to create startup page: code=${result}`);
-    // }
   }
 
   private buildPages(full: string): string[] {
@@ -340,7 +282,7 @@ export class EvenPublisherClient {
       // +1 to account for the newline we add when joining (except possibly last)
       const extra = line.length + (currentLines.length > 0 ? 1 : 0);
       if (currentLength + extra > MAX_CONTENT_LENGTH && currentLines.length > 0) {
-        pages.push(currentLines.join('\n'));// + '... [ page break; next page number: ' + (pages.length + 1) + ']\n\n');
+        pages.push(currentLines.join('\n'));
         currentLines = [line];
         currentLength = line.length;
       } else {
@@ -385,18 +327,6 @@ export class EvenPublisherClient {
     if (!text) return '';
     text = text.slice(0, maxLength);
     return text;
-    // let result = '';
-    // for (const ch of text) {
-    //   const code = ch.codePointAt(0);
-    //   if (code !== undefined && code > 0xffff) {
-    //     const hex = code.toString(16).toUpperCase().padStart(4, '0');
-    //     appendEventLog(`Unsupported character: U+${hex} (${ch})`);
-    //     result += `*`;
-    //   } else {
-    //     result += ch;
-    //   }
-    // }
-    // return result.length > 0 ? result.slice(0, maxLength) : ' ';
   }
 
   private async updateResearchDetailPage(research: Research): Promise<void> {
@@ -416,7 +346,7 @@ export class EvenPublisherClient {
         containerName: 'finfotext',
         contentOffset: 0,
         contentLength: MAX_CONTENT_LENGTH_TOTAL,
-        content: `[${this.ui.researchPageIndex + 1}/${this.ui.researchPages.length}][Scroll=read more][DTap=menu]`
+        content: `[ ${this.ui.researchPageIndex + 1}/${this.ui.researchPages.length} ][ Scroll=read more ][ DTap=menu ]`
       }),
     );
 
@@ -750,7 +680,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRadius: 2,
       paddingLength: 1,
-      content: '[Tab=stop][DTab=cancel]',
+      content: '[ Tab=stop ][ DTab=cancel ]',
       isEventCapture: 0,
     });
     const timerOverlay = new TextContainerProperty({
@@ -828,7 +758,7 @@ export class EvenPublisherClient {
         itemCount: 3,
         itemWidth: 550,
         isItemSelectBorderEn: 1,
-        itemName: ['Start New Article Research', 'Continue Old Article Research', 'Review Ready for Publishing'],
+        itemName: ['Start New Article Research', 'Continue Old Article Research', 'Review Ready for Publishing', 'Exit'],
       }),
     });
 
@@ -1011,7 +941,7 @@ export class EvenPublisherClient {
     //lines.push('Double-tap = Back to list');
 
     const content = this.sanitizeForDisplay(lines.join('\n'), MAX_CONTENT_LENGTH);
-    await this.showTextFullScreen(content, '[Tab=select][DTab=back]');
+    await this.showTextFullScreen(content, '[ Tab=select ][ DTab=back ]');
 
     setStatus('Detail: tap to select, double-tap to go back to list.');
   }
@@ -1082,7 +1012,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRadius: 2,
       paddingLength: 0,
-      content: `[${this.ui.researchPageIndex + 1}/${this.ui.researchPages.length}][Scroll=read more][DTap=menu]`,
+      content: `[ ${this.ui.researchPageIndex + 1}/${this.ui.researchPages.length} ][ Scroll=read more ][ DTap=menu ]`,
       isEventCapture: 0,
     });
 
@@ -1110,8 +1040,6 @@ export class EvenPublisherClient {
     );
 
     if (success) {
-      this.lastPagedScrollDir = null;
-      this.lastPagedScrollDirAtMs = 0;
       setStatus('Research: scroll to read, double-tap for menu.');
       this.ui.view = 'research-detail';
     } else {
@@ -1183,7 +1111,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRadius: 2,
       paddingLength: 0,
-      content: `[${this.ui.readyPageIndex + 1}/${this.ui.readyPages.length}][Scroll=read more][DTap=menu]`,
+      content: `[ ${this.ui.readyPageIndex + 1}/${this.ui.readyPages.length} ][ Scroll=read more ][ DTap=menu ]`,
       isEventCapture: 0,
     });
 
@@ -1210,8 +1138,6 @@ export class EvenPublisherClient {
     );
 
     if (success) {
-      this.lastPagedScrollDir = null;
-      this.lastPagedScrollDirAtMs = 0;
       setStatus('Research: scroll to read, double-tap for menu.');
       this.ui.view = 'ready-detail';
     } else {
@@ -1233,7 +1159,7 @@ export class EvenPublisherClient {
         containerName: 'finfotext',
         contentOffset: 0,
         contentLength: MAX_CONTENT_LENGTH_TOTAL,
-        content: `[${this.ui.readyPageIndex + 1}/${this.ui.readyPages.length}][Scroll=read more][DTap=menu]`,
+        content: `[ ${this.ui.readyPageIndex + 1}/${this.ui.readyPages.length} ][ Scroll=read more ][ DTap=menu ]`,
       }),
     );
 
@@ -1255,6 +1181,9 @@ export class EvenPublisherClient {
       await this.renderResearchList();
     } else if (index === 2) {
       await this.renderReadyList();
+    } else if (index === 3) {
+      setStatus('Shutting down...');
+      await this.bridge.shutDownPageContainer(1);
     }
   }
 
@@ -1625,7 +1554,7 @@ export class EvenPublisherClient {
       await this.showTextFullScreen(
         `${research.title}\n\n` +
         'ElevenLabs API key missing.\n\nSet the key on the phone screen, then try again.',
-        '[Tab=back]'
+        '[ Tab=back ]'
       );
       this.ui.view = 'error';
       return;
@@ -1670,7 +1599,7 @@ export class EvenPublisherClient {
       borderColor: 5,
       borderRadius: 2,
       paddingLength: 0,
-      content: '[Tap=pause][Down=next line][Up=replay][DTap=back]',
+      content: '[ Tap=pause ][ Down=next line ][ Up=replay ][ DTap=back ]',
       isEventCapture: 0,
     });
     const body = new TextContainerProperty({
@@ -1834,25 +1763,7 @@ export class EvenPublisherClient {
     }
   }
 
-  /**
-   * Glass firmware may use different casing / underscores for text container names.
-   */
-  // private normalizeContainerName(name: string): string {
-  //   return name.replace(/_/g, '-').toLowerCase().trim();
-  // }
 
-  // private textContainerNameMatches(
-  //   got: string | undefined,
-  //   expected: string,
-  // ): boolean {
-  //   if (got == null || got === '') return false;
-  //   return this.normalizeContainerName(got) === this.normalizeContainerName(expected);
-  // }
-
-  /**
-   * `evenHubEventFromJson` can drop `listEvent` when the host uses alternate keys
-   * (`list_event`, nested `jsonData`). Merge loose payloads so list taps (main menu, etc.) work.
-   */
   private normalizeIncomingHubEvent(raw: unknown): EvenHubEvent {
     const parsed = evenHubEventFromJson(raw);
     if (raw === null || typeof raw !== 'object') return parsed;
@@ -1951,97 +1862,112 @@ export class EvenPublisherClient {
       undefined;
 
     // Must be gated by view: unguarded `app-menu` was stealing taps from other list screens.
-    if (this.ui.view === 'main-menu' && event.listEvent) {
-      const listGesture =
-        OsEventTypeList.fromJson(event.listEvent.eventType) ??
-        OsEventTypeList.fromJson(eventType) ??
-        eventType;
-      if (
-        listGesture === OsEventTypeList.SCROLL_TOP_EVENT ||
-        listGesture === OsEventTypeList.SCROLL_BOTTOM_EVENT
-      ) {
-        return;
+    if (this.ui.view === 'main-menu') {
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          const idx = event.listEvent?.currentSelectItemIndex ?? 0;
+          await this.handleMainMenuSelect(idx);
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          setStatus('Shutting down...');
+          await this.bridge.shutDownPageContainer(1);
+          return;
+        default:
+          return;
       }
-      const idx = event.listEvent.currentSelectItemIndex ?? 0;
-      await this.handleMainMenuSelect(idx);
-      return;
     }
 
-    if (this.ui.view === 'topic-select' && event.listEvent) {
-      const listGesture = gestureFromListEvent(event.listEvent);
-      if (
-        listGesture === OsEventTypeList.SCROLL_TOP_EVENT ||
-        listGesture === OsEventTypeList.SCROLL_BOTTOM_EVENT
-      ) {
-        return;
-      }
-      if (listGesture === OsEventTypeList.CLICK_EVENT || listGesture === undefined) {
-        const topics = this.ui.topics;
-        const idx = event.listEvent.currentSelectItemIndex ?? 0;
-        if (idx >= topics.length) {
+    if (this.ui.view === 'topic-select') {
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          const topics = this.ui.topics;
+          const idx = event.listEvent?.currentSelectItemIndex ?? 0;
+          if (idx >= topics.length) {
+            await this.renderMainMenu();
+          } else {
+            const topic = topics[idx];
+            this.ui.selectedTopic = topic;
+            await this.startNewResearchFlow();
+          }
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
           await this.renderMainMenu();
-        } else {
-          const topic = topics[idx];
-          this.ui.selectedTopic = topic;
-          await this.startNewResearchFlow();
-        }
-        return;
+          return;
+        default:
+          return;
       }
     }
 
     if (this.ui.view === 'new-research-list') {
-      const aiScrollG =
-        scrollGestureForAiNewsList(event) ??
-        OsEventTypeList.fromJson(eventType) ??
-        eventType;
-
-      if (aiScrollG === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
-        if (!this.consumeIfNotDuplicateScrollEcho('bottom', 900)) return;
-        this.ui.aiSelectedIndex = clamp(this.ui.aiSelectedIndex + 1, 0, this.ui.aiNews.length - 1);
-        await this.renderAiNewsList();
-        return;
-      }
-      if (aiScrollG === OsEventTypeList.SCROLL_TOP_EVENT) {
-        if (!this.consumeIfNotDuplicateScrollEcho('top', 900)) return;
-        this.ui.aiSelectedIndex = clamp(this.ui.aiSelectedIndex - 1, 0, this.ui.aiNews.length - 1);
-        await this.renderAiNewsList();
-        return;
-      }
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        await this.renderAiNewsDetail();
-        return;
-      }
-      if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-        await this.renderMainMenu();
-        return;
+      switch (eventType) {
+        case OsEventTypeList.SCROLL_BOTTOM_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('bottom', 900)) return;
+          this.ui.aiSelectedIndex = clamp(this.ui.aiSelectedIndex + 1, 0, this.ui.aiNews.length - 1);
+          await this.renderAiNewsList();
+          return;
+        case OsEventTypeList.SCROLL_TOP_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('top', 900)) return;
+          this.ui.aiSelectedIndex = clamp(this.ui.aiSelectedIndex - 1, 0, this.ui.aiNews.length - 1);
+          await this.renderAiNewsList();
+          return;
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          await this.renderAiNewsDetail();
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          await this.renderMainMenu();
+          return;
+        default:
+          return;
       }
     }
 
     if (this.ui.view === 'new-research-detail') {
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        await this.createResearchFromAiSelection();
-        return;
-      }
-      if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-        await this.renderAiNewsList();
-        return;
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          await this.createResearchFromAiSelection();
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          await this.renderAiNewsList();
+          return;
+        default:
+          return;
       }
     }
 
     if (this.ui.view === 'research-list') {
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        const drafts = this.getDraftResearches();
-        const idx = event.listEvent?.currentSelectItemIndex ?? 0;
-        if (idx === drafts.length) {
-          await this.renderMainMenu();
-        } else {
-          const research = drafts[idx];
-          if (research) {
-            this.ui.researchSelectedIndex = idx;
-            await this.renderResearchDetail(research);
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          const drafts = this.getDraftResearches();
+          const idx = event.listEvent?.currentSelectItemIndex ?? 0;
+          if (idx === drafts.length) {
+            await this.renderMainMenu();
+          } else {
+            const research = drafts[idx];
+            if (research) {
+              this.ui.researchSelectedIndex = idx;
+              await this.renderResearchDetail(research);
+            }
           }
-        }
-        return;
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          await this.renderMainMenu();
+          return;
+        default:
+          return;
       }
     }
 
@@ -2055,67 +1981,70 @@ export class EvenPublisherClient {
         return;
       }
 
-      const scrollG =
-        scrollGestureForResearchLikeTextEvent(event) ??
-        OsEventTypeList.fromJson(eventType) ??
-        eventType;
-
-      if (scrollG === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
-        if (!this.consumeIfNotDuplicateScrollEcho('bottom', 90)) return;
-        if (this.ui.researchPageIndex < this.ui.researchPages.length - 1) {
-          this.ui.researchPageIndex += 1;
-        }
-        await this.updateResearchDetailPage(research);
-        return;
-      }
-
-      if (scrollG === OsEventTypeList.SCROLL_TOP_EVENT) {
-        if (!this.consumeIfNotDuplicateScrollEcho('top', 90)) return;
-        if (this.ui.researchPageIndex > 0) {
-          this.ui.researchPageIndex -= 1;
-        }
-        await this.updateResearchDetailPage(research);
-        return;
-      }
-
-      if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-        await this.openResearchMenu(research);
-        return;
+      switch (eventType) {
+        case OsEventTypeList.SCROLL_BOTTOM_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('bottom', 900)) return;
+          if (this.ui.researchPageIndex < this.ui.researchPages.length - 1) {
+            this.ui.researchPageIndex += 1;
+          }
+          await this.updateResearchDetailPage(research);
+          return;
+        case OsEventTypeList.SCROLL_TOP_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('top', 900)) return;
+          if (this.ui.researchPageIndex > 0) {
+            this.ui.researchPageIndex -= 1;
+          }
+          await this.updateResearchDetailPage(research);
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          await this.openResearchMenu(research);
+          return;
+        default:
+          return;
       }
     }
 
-    if (this.ui.view === 'research-menu' && event.listEvent) {
+    if (this.ui.view === 'research-menu') {
       const drafts = this.getDraftResearches();
       const research = drafts[this.ui.researchSelectedIndex];
       if (!research) {
         await this.renderResearchList();
         return;
       }
-
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        const idx = event.listEvent.currentSelectItemIndex ?? 0;
-        if (idx === 0) {
-          if (!hasPhonePlaybackPrimedThisSession()) {
-            this.ui.view = 'research-read-aloud-unlock-hint';
-            await this.showTextFullScreen(
-              "Please, open your phone and click once on button 'Unlock & test phone speaker first' to enable audio.",
-              '[Tab=back]',
-            );
-            return;
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          const idx = event.listEvent?.currentSelectItemIndex ?? 0;
+          if (idx === 0) {
+            if (!hasPhonePlaybackPrimedThisSession()) {
+              this.ui.view = 'research-read-aloud-unlock-hint';
+              await this.showTextFullScreen(
+                "Please, open your phone and click once on button 'Unlock & test phone speaker first' to enable audio.",
+                '[Tab=back]',
+              );
+              return;
+            }
+            await this.startReadAloud(research);
+          } else if (idx === 1) {
+            await this.toggleVoicePromptRecording(research);
+          } else if (idx === 2) {
+            await this.markResearchReady(research);
+          } else if (idx === 3) {
+            await this.openConfirmCancelResearch(research, 'draft');
+          } else if (idx === 4) {
+            await this.renderResearchList();
+          } else if (idx === 5) {
+            await this.renderMainMenu();
           }
-          await this.startReadAloud(research);
-        } else if (idx === 1) {
-          await this.toggleVoicePromptRecording(research);
-        } else if (idx === 2) {
-          await this.markResearchReady(research);
-        } else if (idx === 3) {
-          await this.openConfirmCancelResearch(research, 'draft');
-        } else if (idx === 4) {
-          await this.renderResearchList();
-        } else if (idx === 5) {
-          await this.renderMainMenu();
-        }
-        return;
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          await this.renderResearchDetail(research);
+          return;
+        default:
+          return;
       }
     }
 
@@ -2127,80 +2056,56 @@ export class EvenPublisherClient {
         return;
       }
 
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        if (this.currentReadAloudAudio) {
-          if (this.currentReadAloudAudio.paused) {
-            setStatus('Read aloud resumed. Tap to pause or double-tap to exit.');
-            this.currentReadAloudAudio.play().catch((err) => {
-              setStatus(
-                `Read aloud: ${err instanceof Error ? err.message : String(err)}\n\nOn the phone, tap “Unlock & test phone speaker” first (iOS/Android autoplay).`,
-              );
-            });
-          } else {
-            this.currentReadAloudAudio.pause();
-            setStatus('Read aloud paused. Tap to continue or double-tap to exit.');
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (this.currentReadAloudAudio) {
+            if (this.currentReadAloudAudio.paused) {
+              setStatus('Read aloud resumed. Tap to pause or double-tap to exit.');
+              this.currentReadAloudAudio.play().catch((err) => {
+                setStatus(
+                  `Read aloud: ${err instanceof Error ? err.message : String(err)}\n\nOn the phone, tap “Unlock & test phone speaker” first (iOS/Android autoplay).`,
+                );
+              });
+            } else {
+              this.currentReadAloudAudio.pause();
+              setStatus('Read aloud paused. Tap to continue or double-tap to exit.');
+            }
           }
-        }
-        return;
-      }
-
-      if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-        await this.finishReadAloud(research);
-        return;
-      }
-
-      if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
-        if (this.currentReadAloudAudio) {
-          this.currentReadAloudAudio.pause();
-          this.currentReadAloudAudio.currentTime = 0;
-          this.currentReadAloudAudio = null;
-        }
-        this.readAloudLineIndex -= 1;
-        if (this.readAloudLineIndex < 0) {
-          this.readAloudLineIndex = 0;
-        }
-        await this.renderReadAloudCurrentLine(research);
-        return;
-      }
-
-      if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
-        if (this.currentReadAloudAudio) {
-          this.currentReadAloudAudio.pause();
-          this.currentReadAloudAudio.currentTime = 0;
-          this.currentReadAloudAudio = null;
-        }
-        this.readAloudLineIndex += 1;
-        await this.renderReadAloudCurrentLine(research);
-        return;
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          await this.finishReadAloud(research);
+          return;
+        case OsEventTypeList.SCROLL_TOP_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('top', 900)) return;
+          if (this.currentReadAloudAudio) {
+            this.currentReadAloudAudio.pause();
+            this.currentReadAloudAudio.currentTime = 0;
+            this.currentReadAloudAudio = null;
+          }
+          this.readAloudLineIndex -= 1;
+          if (this.readAloudLineIndex < 0) {
+            this.readAloudLineIndex = 0;
+          }
+          await this.renderReadAloudCurrentLine(research);
+          return;
+        case OsEventTypeList.SCROLL_BOTTOM_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('bottom', 900)) return;
+          if (this.currentReadAloudAudio) {
+            this.currentReadAloudAudio.pause();
+            this.currentReadAloudAudio.currentTime = 0;
+            this.currentReadAloudAudio = null;
+          }
+          this.readAloudLineIndex += 1;
+          await this.renderReadAloudCurrentLine(research);
+          return;
+        default:
+          return;
       }
     }
 
     if (this.ui.view === 'prompt-recording') {
-      if (event.sysEvent?.eventType === OsEventTypeList.IMU_DATA_REPORT) {
-        return;
-      }
-
-      const te = event.textEvent;
-      if (
-        te &&
-        (te.containerName === 'vprompt-tr' || te.containerID === VOICE_PROMPT_TRANSCRIPT_CONTAINER_ID) &&
-        performance.now() - this.voicePromptTranscriptUpgradeAtMs < 240
-      ) {
-        return;
-      }
-
-      const listG = gestureFromListEvent(event.listEvent);
-      const textG = gestureFromTextEvent(event.textEvent);
-      const mergedGesture = OsEventTypeList.fromJson(eventType) ?? eventType;
-
-      const clickFromChannels =
-        listG === OsEventTypeList.CLICK_EVENT || textG === OsEventTypeList.CLICK_EVENT;
-      const clickFromMerged =
-        mergedGesture === OsEventTypeList.CLICK_EVENT || mergedGesture === undefined;
-      const doubleFromChannels =
-        listG === OsEventTypeList.DOUBLE_CLICK_EVENT || textG === OsEventTypeList.DOUBLE_CLICK_EVENT;
-      const doubleFromMerged = mergedGesture === OsEventTypeList.DOUBLE_CLICK_EVENT;
-
       const drafts = this.getDraftResearches();
       const research = drafts[this.ui.researchSelectedIndex];
       if (!research) {
@@ -2208,45 +2113,54 @@ export class EvenPublisherClient {
         return;
       }
 
-      // Stop recording: firmware often reports Tab only on merged `eventType`, not nested text/list.
-      if (clickFromChannels || clickFromMerged) {
-        if (this.isVoiceRecording) {
-          await this.toggleVoicePromptRecording(research);
-          return;
-        }
-        // Avoid spurious exit to research detail (merged `undefined`); finishing recording is handled above.
-        if (mergedGesture === OsEventTypeList.CLICK_EVENT || clickFromChannels) {
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          if (this.isVoiceRecording) {
+            await this.toggleVoicePromptRecording(research);
+            return;
+          }
           await this.renderResearchDetail(research);
-        }
-        return;
-      }
-
-      if (doubleFromChannels || doubleFromMerged) {
-        if (this.isVoiceRecording) {
-          await cancelSttRecording();
-          this.isVoiceRecording = false;
-          this.clearVoicePromptRecordingUi();
-        }
-        await this.renderResearchDetail(research);
-        return;
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          if (this.isVoiceRecording) {
+            await cancelSttRecording();
+            this.isVoiceRecording = false;
+            this.clearVoicePromptRecordingUi();
+          }
+          await this.renderResearchDetail(research);
+          return;
+        default:
+          return;
       }
     }
 
-    if (this.ui.view === 'ready-list' && event.listEvent) {
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        const ready = this.getReadyResearches();
-        const idx = event.listEvent.currentSelectItemIndex ?? 0;
-        if (idx === ready.length) {
-          await this.renderMainMenu();
-        } else {
-          const research = ready[idx];
-          if (research) {
-            this.ui.readySelectedIndex = idx;
-            this.ui.promptDelayDays = 0;
-            await this.renderReadyDetail(research);
+    if (this.ui.view === 'ready-list') {
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          const ready = this.getReadyResearches();
+          const idx = event.listEvent?.currentSelectItemIndex ?? 0;
+          if (idx === ready.length) {
+            await this.renderMainMenu();
+          } else {
+            const research = ready[idx];
+            if (research) {
+              this.ui.readySelectedIndex = idx;
+              this.ui.promptDelayDays = 0;
+              await this.renderReadyDetail(research);
+            }
           }
-        }
-        return;
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          await this.renderMainMenu();
+          return;
+        default:
+          return;
       }
     }
 
@@ -2257,108 +2171,116 @@ export class EvenPublisherClient {
         await this.renderReadyList();
         return;
       }
-      const readyScrollG =
-        scrollGestureForResearchLikeTextEvent(event) ??
-        OsEventTypeList.fromJson(eventType) ??
-        eventType;
-
-      if (readyScrollG === OsEventTypeList.SCROLL_TOP_EVENT) {
-        if (!this.consumeIfNotDuplicateScrollEcho('top', 90)) return;
-        if (this.ui.readyPageIndex === 0) {
-          this.ui.promptDelayDays = clamp(this.ui.promptDelayDays - 1, 0, 10);
-          await this.updateReadyDelayText(research);
-        } else {
+      switch (eventType) {
+        case OsEventTypeList.SCROLL_TOP_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('top', 90)) return;
           this.ui.readyPageIndex = Math.max(0, this.ui.readyPageIndex - 1);
           await this.updateReadyDelayText(research);
-        }
-        return;
-      }
-
-      if (readyScrollG === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
-        if (!this.consumeIfNotDuplicateScrollEcho('bottom', 90)) return;
-        if (this.ui.readyPageIndex < this.ui.readyPages.length - 1) {
-          this.ui.readyPageIndex += 1;
-        }
-        await this.updateReadyDelayText(research);
-        return;
-      }
-
-      if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-        await this.openReadyMenu(research);
-        return;
+          return;
+        case OsEventTypeList.SCROLL_BOTTOM_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('bottom', 90)) return;
+          if (this.ui.readyPageIndex < this.ui.readyPages.length - 1) {
+            this.ui.readyPageIndex += 1;
+          }
+          await this.updateReadyDelayText(research);
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          await this.openReadyMenu(research);
+          return;
+        default:
+          return;
       }
     }
 
-    if (this.ui.view === 'ready-menu' && event.listEvent) {
+    if (this.ui.view === 'ready-menu') {
       const ready = this.getReadyResearches();
       const research = ready[this.ui.readySelectedIndex];
       if (!research) {
         await this.renderReadyList();
         return;
       }
-
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        const idx = event.listEvent.currentSelectItemIndex ?? 0;
-        if (idx === 0) {
-          await this.publishCurrentReadyResearch();
-        } else if (idx === 1) {
-          await this.openConfirmCancelResearch(research, 'ready');
-        } else if (idx === 2) {
-          await this.renderReadyList();
-        } else if (idx === 3) {
-          await this.renderMainMenu();
-        }
-        return;
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          const idx = event.listEvent?.currentSelectItemIndex ?? 0;
+          if (idx === 0) {
+            await this.publishCurrentReadyResearch();
+          } else if (idx === 1) {
+            await this.openConfirmCancelResearch(research, 'ready');
+          } else if (idx === 2) {
+            await this.renderReadyList();
+          } else if (idx === 3) {
+            await this.renderMainMenu();
+          }
+          return;
+        case OsEventTypeList.DOUBLE_CLICK_EVENT:
+          if (!this.consumeIfNotDuplicateEventEcho('double-click', 900)) return;
+          await this.renderReadyDetail(research);
+          return;
+        default:
+          return;
       }
     }
 
-    if (
-      (this.ui.view === 'confirm-cancel-research' && event.listEvent) ||
-      (this.ui.view === 'confirm-cancel-ready' && event.listEvent)
-    ) {
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        const idx = event.listEvent.currentSelectItemIndex ?? 0;
-        const research = this.getCurrentResearch();
-        const mode = this.cancelMode;
-        this.cancelMode = null;
-
-        if (!research || !mode) {
-          await this.renderMainMenu();
-          return;
-        }
-
-        if (idx === 0) {
-          // Yes
-          await this.removeResearch(research);
-          await this.renderMainMenu();
-        } else {
-          // No
-          if (mode === 'draft') {
-            await this.renderResearchDetail(research);
-          } else {
-            await this.renderReadyDetail(research);
+    if (this.ui.view === 'confirm-cancel-research' || this.ui.view === 'confirm-cancel-ready') {
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          const idx = event.listEvent?.currentSelectItemIndex ?? 0;
+          const research = this.getCurrentResearch();
+          const mode = this.cancelMode;
+          this.cancelMode = null;
+          if (!research || !mode) {
+            await this.renderMainMenu();
+            return;
           }
-        }
-        return;
+
+          if (idx === 0) {
+            // Yes
+            await this.removeResearch(research);
+            await this.renderMainMenu();
+          } else {
+            // No
+            if (mode === 'draft') {
+              await this.renderResearchDetail(research);
+            } else {
+              await this.renderReadyDetail(research);
+            }
+          }
+          return;
       }
     }
 
     if (this.ui.view === 'research-read-aloud-unlock-hint') {
       const drafts = this.getDraftResearches();
       const research = drafts[this.ui.researchSelectedIndex];
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        if (research) {
-          await this.renderResearchDetail(research);
-        } else {
-          await this.renderResearchList();
-        }
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          if (research) {
+            await this.renderResearchDetail(research);
+          } else {
+            await this.renderResearchList();
+          }
+          return;
+        default:
+          return;
       }
-      return;
     }
 
     if (this.ui.view === 'error') {
-      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
-        await this.renderMainMenu();
+      switch (eventType) {
+        case OsEventTypeList.CLICK_EVENT:
+        case undefined:
+          if (!this.consumeIfNotDuplicateEventEcho('click', 900)) return;
+          await this.renderMainMenu();
+          return;
+        default:
+          return;
       }
     }
   }

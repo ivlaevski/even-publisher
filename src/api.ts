@@ -171,7 +171,7 @@ export async function elaborateResearch(
   const response = await callOpenAi<{
     choices: { message: { content?: string } }[];
   }>(config, {
-    model: config.openAiModel || 'gpt-4.1-mini',
+    model: config.openAiModel || 'gpt-5.4-mini',
     messages: [
       {
         role: 'user',
@@ -205,7 +205,7 @@ export async function refineResearch(
   const response = await callOpenAi<{
     choices: { message: { content?: string } }[];
   }>(config, {
-    model: config.openAiModel || 'gpt-4.1-mini',
+    model: config.openAiModel || 'gpt-5.4-mini',
     messages: [
       {
         role: 'user',

@@ -1,5 +1,4 @@
 import { waitForEvenAppBridge, type EvenAppBridge } from '@evenrealities/even_hub_sdk';
-
 import { EvenPublisherClient } from './even-client';
 import type { Research } from './types';
 import {
@@ -18,6 +17,9 @@ import {
   loadTopicsFromLocalStorage,
   saveTopicsToLocalStorage,
 } from './utils';
+
+
+
 
 let client: EvenPublisherClient | null = null;
 let statusTimer: number | null = null;
@@ -460,7 +462,7 @@ async function bootSettingsUi(): Promise<void> {
     const next = {
       googleGenerativeApiKey: googleGenerativeKeyInput?.value ?? '',
       openAiApiKey: openAiKeyInput?.value ?? '',
-      openAiModel: openAiModelInput?.value ?? 'gpt-4.1-mini',
+      openAiModel: openAiModelInput?.value ?? 'gpt-5.4-mini',
       elevenLabsApiKey: elevenLabsKeyInput?.value ?? '',
       wordpressBaseUrl: wpUrlInput?.value ?? '',
       wordpressUsername: wpUserInput?.value ?? '',

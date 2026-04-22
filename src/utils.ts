@@ -134,7 +134,7 @@ export async function loadConfigFromLocalStorage(bridge: EvenAppBridge | null): 
   return {
     googleGenerativeApiKey,
     openAiApiKey,
-    openAiModel: openAiModel || 'gpt-4.1-mini',
+    openAiModel: openAiModel || 'gpt-5.4-mini',
     wordpressBaseUrl,
     wordpressUsername,
     wordpressPassword,
