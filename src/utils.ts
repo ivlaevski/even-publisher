@@ -1,5 +1,7 @@
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk';
 
+import type { PublisherTopic } from './types';
+
 const STATUS_ID = 'status';
 const LOG_ID = 'event-log';
 
@@ -107,8 +109,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label = 'operati
 
 export async function loadConfigFromLocalStorage(bridge: EvenAppBridge | null): Promise<{
   googleGenerativeApiKey: string;
-  openAiApiKey: string;
-  openAiModel: string;
+  googleGenerativeDraftModel: string;
   wordpressBaseUrl: string;
   wordpressUsername: string;
   wordpressPassword: string;
@@ -116,16 +117,14 @@ export async function loadConfigFromLocalStorage(bridge: EvenAppBridge | null): 
 }> {
   const [
     googleGenerativeApiKey,
-    openAiApiKey,
-    openAiModel,
+    googleGenerativeDraftModel,
     wordpressBaseUrl,
     wordpressUsername,
     wordpressPassword,
     elevenLabsApiKey,
   ] = await Promise.all([
     getStorageValue(bridge, 'article-publisher:google-generative-key'),
-    getStorageValue(bridge, 'article-publisher:openai-key'),
-    getStorageValue(bridge, 'article-publisher:openai-model'),
+    getStorageValue(bridge, 'article-publisher:google-generative-draft-model'),
     getStorageValue(bridge, 'article-publisher:wp-url'),
     getStorageValue(bridge, 'article-publisher:wp-username'),
     getStorageValue(bridge, 'article-publisher:wp-password'),
@@ -133,8 +132,7 @@ export async function loadConfigFromLocalStorage(bridge: EvenAppBridge | null): 
   ]);
   return {
     googleGenerativeApiKey,
-    openAiApiKey,
-    openAiModel: openAiModel || 'gpt-5.4-mini',
+    googleGenerativeDraftModel: googleGenerativeDraftModel || 'gemini-3-flash-preview',
     wordpressBaseUrl,
     wordpressUsername,
     wordpressPassword,
@@ -146,8 +144,7 @@ export async function saveConfigToLocalStorage(
   bridge: EvenAppBridge | null,
   config: {
   googleGenerativeApiKey: string;
-  openAiApiKey: string;
-  openAiModel: string;
+  googleGenerativeDraftModel: string;
   wordpressBaseUrl: string;
   wordpressUsername: string;
   wordpressPassword: string;
@@ -156,8 +153,11 @@ export async function saveConfigToLocalStorage(
 ): Promise<void> {
   await Promise.all([
     setStorageValue(bridge, 'article-publisher:google-generative-key', config.googleGenerativeApiKey.trim()),
-    setStorageValue(bridge, 'article-publisher:openai-key', config.openAiApiKey.trim()),
-    setStorageValue(bridge, 'article-publisher:openai-model', config.openAiModel.trim()),
+    setStorageValue(
+      bridge,
+      'article-publisher:google-generative-draft-model',
+      config.googleGenerativeDraftModel.trim(),
+    ),
     setStorageValue(bridge, 'article-publisher:wp-url', config.wordpressBaseUrl.trim()),
     setStorageValue(bridge, 'article-publisher:wp-username', config.wordpressUsername.trim()),
     setStorageValue(bridge, 'article-publisher:wp-password', config.wordpressPassword.trim()),
@@ -165,21 +165,55 @@ export async function saveConfigToLocalStorage(
   ]);
 }
 
-export async function loadTopicsFromLocalStorage(bridge: EvenAppBridge | null): Promise<string[]> {
+export async function loadTopicsFromLocalStorage(bridge: EvenAppBridge | null): Promise<PublisherTopic[]> {
   const raw = await getStorageValue(bridge, 'article-publisher:topics');
-  return raw
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((entry) => normalizePublisherTopic(entry))
+        .filter((topic) => topic.name.length > 0);
+    } catch {
+      appendEventLog('Failed to parse topics JSON; falling back to legacy format.');
+    }
+  }
+
+  return trimmed
     .split('\n')
     .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+    .filter((value) => value.length > 0)
+    .map((name) => ({ name, rssUrl: '' }));
+}
+
+function normalizePublisherTopic(entry: unknown): PublisherTopic {
+  if (typeof entry === 'string') {
+    return { name: entry.trim(), rssUrl: '' };
+  }
+  if (entry && typeof entry === 'object') {
+    const record = entry as { name?: unknown; rssUrl?: unknown };
+    return {
+      name: String(record.name ?? '').trim(),
+      rssUrl: String(record.rssUrl ?? '').trim(),
+    };
+  }
+  return { name: '', rssUrl: '' };
 }
 
 export async function saveTopicsToLocalStorage(
   bridge: EvenAppBridge | null,
-  topics: string[],
+  topics: PublisherTopic[],
 ): Promise<void> {
-  const normalized = topics.map((value) => value.trim()).filter((value) => value.length > 0);
-  const payload = normalized.join('\n');
-  await setStorageValue(bridge, 'article-publisher:topics', payload);
+  const normalized = topics
+    .map((topic) => ({
+      name: topic.name.trim(),
+      rssUrl: topic.rssUrl.trim(),
+    }))
+    .filter((topic) => topic.name.length > 0);
+  await setStorageValue(bridge, 'article-publisher:topics', JSON.stringify(normalized));
 }
 
 export function clamp(value: number, min: number, max: number): number {

@@ -2,7 +2,7 @@
   "package_id": "com.vlaevski.articlepublisher",
   "edition": "202601",
   "name": "article-publisher",
-  "version": "1.0.196",
+  "version": "2.0.0",
   "min_app_version": "2.0.0",
   "min_sdk_version": "0.0.7",
   "tagline": "Draft and publish AI-powered WordPress posts from G2 glasses",
@@ -13,13 +13,11 @@
   "permissions": [
     {
       "name": "network",
-      "desc": "OpenAI, Google Generative Language (Gemini), ElevenLabs STT/TTS, user WordPress site, and settings help links (see whitelist).",
+      "desc": "Google Generative Language (Gemini), ElevenLabs STT/TTS, user WordPress site, and settings help links (see whitelist).",
       "whitelist": [
         "https://api.elevenlabs.io",
-        "https://api.openai.com",
         "https://generativelanguage.googleapis.com",
         "https://elevenlabs.com",
-        "https://platform.openai.com",
         "https://aistudio.google.com",
         "*"
       ]

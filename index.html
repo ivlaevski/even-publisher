@@ -314,6 +314,56 @@
       background: rgba(79, 70, 229, 0.35);
     }
 
+    .last-published-image-wrap {
+      margin: 0.75rem 0 1rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 0.75rem;
+      background: var(--bg-panel-soft);
+      min-height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .last-published-image-wrap img {
+      display: block;
+      width: 100%;
+      max-height: 320px;
+      object-fit: cover;
+    }
+
+    .last-published-image-placeholder {
+      padding: 1.25rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    #last-published-status {
+      margin: 0 0 0.75rem;
+      padding: 0.55rem 0.7rem;
+      border-radius: 0.55rem;
+      border: 1px solid var(--border-soft);
+      background: rgba(79, 70, 229, 0.12);
+      font-size: 0.82rem;
+    }
+
+    #last-published-copy {
+      width: 100%;
+      min-height: 220px;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: 0.85rem;
+      line-height: 1.45;
+      border-radius: 0.55rem;
+      border: 1px solid var(--border-soft);
+      background: var(--bg-panel);
+      color: var(--text-main);
+      padding: 0.65rem 0.75rem;
+      resize: vertical;
+    }
+
     #status {
       margin-top: 1rem;
       padding: 0.75rem 0.9rem;
@@ -485,6 +535,7 @@
       <ul class="menu-list">
         <li><button type="button" class="menu-link active" data-page-target="page-dashboard">Dashboard</button></li>
         <li><button type="button" class="menu-link" data-page-target="page-work-status">Work status</button></li>
+        <li><button type="button" class="menu-link" data-page-target="page-last-published">Last Published</button></li>
         <li><button type="button" class="menu-link" data-page-target="page-help-log">Help &amp; log</button></li>
         <li><button type="button" class="menu-link" data-page-target="page-settings">Settings</button></li>
       </ul>
@@ -539,9 +590,16 @@
         </p>
         <label for="new-topic">Add topic</label>
         <input id="new-topic" type="text" placeholder="e.g. Artificial Intelligence, Quantum computing…" />
+        <label for="new-topic-rss">RSS feed URL (optional)</label>
+        <input id="new-topic-rss" type="url" placeholder="https://example.com/feed.xml" />
+        <p class="muted" style="margin-top: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
+          When set, new research for this topic reads that RSS/Atom XML feed only. Leave empty to use Gemini web
+          search instead.
+        </p>
         <ul id="topics-list" class="topic-list"></ul>
         <div class="btn-row">
           <button id="topics-add" class="btn btn-primary">Add topic</button>
+          <button id="topics-update" class="btn btn-ghost">Update selected</button>
           <button id="topics-delete" class="btn btn-ghost">Delete selected</button>
           <button id="topics-save" class="btn btn-ghost">Save list</button>
         </div>
@@ -569,6 +627,38 @@
         </p>
         <ul id="ready-researches-list" class="research-manage-list"></ul>
         <p id="ready-researches-empty" class="muted" hidden style="margin: 0.35rem 0 0">Nothing ready yet.</p>
+      </section>
+    </section>
+
+    <section id="page-last-published" class="app-page" hidden>
+      <section class="card" id="last-published-card">
+        <h2>Last Published</h2>
+        <p class="muted" style="margin-top: 0">
+          After you publish from the glasses, social copy and a header image appear here for easy copy/paste to other
+          platforms.
+        </p>
+        <p id="last-published-status" class="muted">Nothing published yet in this session.</p>
+        <div id="last-published-image-wrap" class="last-published-image-wrap">
+          <div id="last-published-image-placeholder" class="last-published-image-placeholder">
+            Image will appear here after publishing.
+          </div>
+          <img id="last-published-image" alt="Generated social media illustration" hidden />
+        </div>
+        <div class="btn-row" style="margin-top: 0">
+          <button type="button" id="last-published-save-image" class="btn btn-ghost" disabled>
+            Save image to phone
+          </button>
+          <button type="button" id="last-published-regenerate-image" class="btn btn-ghost" disabled>
+            Regenerate image
+          </button>
+        </div>
+        <label for="last-published-copy">Social message (plain text)</label>
+        <textarea id="last-published-copy" readonly placeholder="Publish from the glasses to generate copy here."></textarea>
+        <div class="btn-row">
+          <button type="button" id="last-published-copy-text" class="btn btn-primary" disabled>
+            Copy message
+          </button>
+        </div>
       </section>
     </section>
 
@@ -621,21 +711,14 @@
           <label for="google-generative-key">Google Gemini API key</label>
           <input id="google-generative-key" type="password" autocomplete="off" />
           <p class="muted" style="margin-top: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
-            Used for “new research” topic news (Gemini + search grounding). Get a key at
+            Used for topic news, draft elaboration, and refinement (Gemini + search grounding where
+            enabled). Get a key at
             <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI
               Studio</a>.
           </p>
 
-          <label for="openai-key">OpenAI API key</label>
-          <input id="openai-key" type="password" autocomplete="off" />
-          <p class="muted" style="margin-top: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem">
-            Used for “research” and “refinement” voice prompts. Get a key at
-            <a href="https://platform.openai.com/api-keys" target="_blank"
-              rel="noopener noreferrer">openai.com/api-keys</a>.
-          </p>
-
-          <label for="openai-model">OpenAI model</label>
-          <input id="openai-model" type="text" placeholder="gpt-5.4-mini" />
+          <label for="google-generative-draft-model">Gemini model (drafts &amp; refinement)</label>
+          <input id="google-generative-draft-model" type="text" placeholder="gemini-3-flash-preview" />
 
           <label for="elevenlabs-key">ElevenLabs API key</label>
           <input id="elevenlabs-key" type="password" autocomplete="off" />
@@ -786,6 +869,7 @@
       persistThemeLocal(normalized);
     };
     window.__articlePublisherGetTheme = () => getCurrentTheme();
+    window.__articlePublisherShowPage = showPage;
   </script>
   <script type="module" src="/src/main.ts"></script>
 </body>

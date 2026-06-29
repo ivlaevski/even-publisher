@@ -10,12 +10,11 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
 | Service | Role in this app | Documentation & accounts |
 |--------|-------------------|---------------------------|
 | **Even Realities** | G2 glasses, Even Hub WebView, [`EvenAppBridge`](https://www.npmjs.com/package/@evenrealities/even_hub_sdk) (SDK) | [evenrealities.com](https://www.evenrealities.com/) |
-| **Google Gemini** | Recent-topic news via Generative Language API + optional Google Search grounding | [Gemini API](https://ai.google.dev/gemini-api), [Google AI Studio (API keys)](https://aistudio.google.com/apikey), [Grounding with Google Search](https://ai.google.dev/gemini-api/docs/google-search) |
-| **OpenAI** | Chat Completions — elaborate news into drafts, refine research text | [platform.openai.com](https://platform.openai.com/), [API keys](https://platform.openai.com/api-keys), [Chat Completions](https://platform.openai.com/docs/api-reference/chat) |
+| **Google Gemini** | Topic news, draft elaboration, and refinement (Generative Language API + Google Search grounding for news and source URL validation) | [Gemini API](https://ai.google.dev/gemini-api), [Google AI Studio (API keys)](https://aistudio.google.com/apikey), [Grounding with Google Search](https://ai.google.dev/gemini-api/docs/google-search) |
 | **ElevenLabs** | Text-to-speech (read aloud), speech-to-text (`scribe_v2`-style STT) | [elevenlabs.io](https://elevenlabs.io/), [API keys](https://elevenlabs.com/settings/api-keys), [API docs](https://elevenlabs.io/docs) |
 | **WordPress (your site)** | Create/update posts through the REST API (your base URL) | [REST API handbook](https://developer.wordpress.org/rest-api/), [Application passwords](https://developer.wordpress.org/application-passwords/) |
 
-**API hosts used at runtime** (typical): `generativelanguage.googleapis.com`, `api.openai.com`, `api.elevenlabs.io`, and your own WordPress origin.
+**API hosts used at runtime** (typical): `generativelanguage.googleapis.com`, `api.elevenlabs.io`, and your own WordPress origin.
 
 ## Usage article
 
@@ -34,21 +33,25 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
 - **Topic management on phone**
   - In `index.html`, the “Prompt Topics” card lets you:
     - View the current list of topics.
-    - Add a new topic via an input field and “Add topic” button.
-    - Select a topic from the list and remove it via “Delete selected”.
-    - Persist the list using the “Save list” button.
-  - Topics are stored in `localStorage` (`article-publisher:topics`) and are used when starting new research on the glasses.
+    - Add a new topic via name and optional **RSS feed URL**.
+    - Select a topic to edit its name or RSS URL, then **Update selected**.
+    - Remove a topic via **Delete selected**.
+    - Persist the list using the **Save list** button.
+  - Topics are stored in `localStorage` (`article-publisher:topics`) as JSON and are used when starting new research on the glasses.
+  - **RSS URL empty** — the app uses Gemini with Google Search grounding (same as before).
+  - **RSS URL set** — the app fetches that feed’s XML and uses Gemini to pick up to 10 articles related to the topic from the feed only.
 
 - **Start new research flow**
   - When you choose **Start new research** on the glasses:
-    1. The client loads topics from the phone and, if any exist, shows a **topic selection** list.
-    2. After selecting a topic, the app calls **Google Gemini** (with search grounding) for recent developments about that topic.
+    1. The client loads topics from the phone and, if any exist, shows a **topic selection** list (RSS topics are marked `[RSS]`).
+    2. After selecting a topic, the app either:
+       - fetches the topic’s **RSS feed** and asks Gemini to extract relevant articles from the XML, or
+       - calls **Google Gemini** with search grounding for recent developments about that topic.
     3. A scrollable list of news items is shown; tapping opens details, and tapping again creates a **research draft**.
   - If no topics are configured on the phone, the flow falls back to the default topic “Artificial Intelligence”.
 
 - **AI integration**
-  - **Google Gemini** — fetch recent, citation-friendly topic news (structured JSON).
-  - **OpenAI Chat Completions** — elaborate a selected news item into a draft, and apply refinement prompts while preserving tone and structure.
+  - **Google Gemini** — fetch recent, citation-friendly topic news (structured JSON); elaborate a selected news item into a draft with search-grounded source URL validation; apply refinement prompts while preserving tone and structure.
 
 - **Research lifecycle**
   - Draft researches are stored locally on the device (via Even Hub storage).
@@ -95,10 +98,15 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
     - **Cancel publishing** – after a Yes / No confirmation, removes the research and goes back to main menu.
     - Navigation options back to the ready list or main menu.
 
+- **Last Published (phone)**
+  - After a successful WordPress publish from the glasses, open **Last Published** in the phone menu.
+  - The app prepares a **plain-text social message** (title, body, validated source URL, hashtags, AI disclaimer) for copy/paste.
+  - **Gemini** generates a header illustration (`gemini-2.5-flash-image`); status labels show *Preparing social copy…*, *Generating image…*, and *Ready*.
+  - **Copy message** copies the textarea; **Save image to phone** downloads the illustration; **Regenerate image** retries if generation failed.
+
 - **Settings on phone**
   - “AI & Publishing Settings” card provides inputs for:
-    - Google Gemini API key (news flow).
-    - OpenAI API key and model (drafting / refinement).
+    - Google Gemini API key and model (news, drafting, refinement).
     - ElevenLabs API key.
     - WordPress base URL, username and application password/token.
   - Settings are stored only on the phone in `localStorage` and are read by the client before making any external API calls.
@@ -107,8 +115,7 @@ Runtime integrations (API keys and base URLs are set in **AI & Publishing Settin
 
 To use Article Publisher end‑to‑end you will need:
 
-- A **Google** account with **[Google AI Studio](https://aistudio.google.com/apikey)** (or equivalent) access for the **Gemini API**, used for the topic news step.
-- An **OpenAI account** and an API key with access to the selected chat model (e.g. `gpt-4.1-mini`).
+- A **Google** account with **[Google AI Studio](https://aistudio.google.com/apikey)** (or equivalent) access for the **Gemini API**, used for topic news, draft elaboration, and refinement.
 - An **ElevenLabs account** and an API key with access to:
   - Text‑to‑Speech (for read‑aloud).
   - Speech‑to‑Text (for voice prompts).
@@ -135,7 +142,7 @@ Basic setup steps:
 
 3. **Configure external services**
    - In **AI & Publishing Settings**:
-     - Paste your **Google Gemini API key**, **OpenAI API key** and desired model name.
+     - Paste your **Google Gemini API key** and desired model name.
      - Paste your **ElevenLabs API key**.
      - Set your **WordPress base URL**, username and application password/token.
    - In **Prompt Topics**:
@@ -150,13 +157,13 @@ Basic setup steps:
 - **`src/even-client.ts`**
   - Core Article Publisher client running inside the Even Hub WebView.
   - Manages UI state, view rendering on glasses, and all gesture handling.
-  - Orchestrates calls to Gemini, OpenAI, ElevenLabs, and WordPress via helper modules.
+  - Orchestrates calls to Gemini, ElevenLabs, and WordPress via helper modules.
 
 - **`src/api.ts`**
-  - Wraps Gemini, OpenAI, and WordPress calls:
-    - `fetchLatestAiNews(config, topic)` – topic‑driven news via Gemini (+ search tool where enabled).
-    - `elaborateResearch` – generate long‑form LinkedIn‑style content from a selected news item.
-    - `refineResearch` – apply user prompts to existing research content.
+  - Wraps Gemini and WordPress calls:
+    - `fetchLatestAiNews(config, topic)` – topic-driven news via RSS feed XML or Gemini search grounding.
+    - `elaborateResearch` – generate long‑form LinkedIn‑style content from a selected news item (with search-grounded source URL validation).
+    - `refineResearch` – apply user prompts to existing research content via Gemini.
     - `publishToWordPress` – create draft posts on a target WordPress site.
 
 - **`src/main.ts`**
@@ -171,6 +178,9 @@ Basic setup steps:
     - Config and topic persistence in `localStorage`.
     - Small helpers like `clamp` and `generateId`.
 
+- **`src/last-published.ts`**
+  - After WordPress publish: builds social copy (Gemini + search-grounded source URL), generates a header image (Gemini), persists snapshot, and powers the phone **Last Published** tab.
+
 - **`src/stt-elevenlabs.ts`**
   - Buffers PCM from the hub, builds WAV for ElevenLabs STT, and can notify the UI with **live** buffer stats while recording.
 
@@ -184,7 +194,7 @@ Basic setup steps:
 
 2. **Configure on phone (WebView)**  
    - Open the Article Publisher WebView on your phone.
-   - Enter your Gemini, OpenAI, and ElevenLabs keys, and WordPress credentials.
+   - Enter your Gemini and ElevenLabs keys, and WordPress credentials.
    - Define one or more topics in the **Prompt Topics** card and save the list.
 
 3. **Connect G2 glasses**

@@ -1,6 +1,13 @@
 import { waitForEvenAppBridge, type EvenAppBridge } from '@evenrealities/even_hub_sdk';
 import { EvenPublisherClient } from './even-client';
-import type { Research } from './types';
+import type { PublisherTopic, Research, LastPublishedSnapshot } from './types';
+import {
+  loadLastPublishedSnapshot,
+  processLastPublishedPending,
+  readLastPublishedPending,
+  regenerateLastPublishedImage,
+  saveImageToPhone,
+} from './last-published';
 import {
   PHONE_AUDIO_INPUT_KEY,
   PHONE_AUDIO_OUTPUT_KEY,
@@ -58,6 +65,8 @@ declare global {
     __evenPublisherRefreshResearchLists?: () => void;
     __articlePublisherSetTheme?: (theme: string) => void;
     __articlePublisherGetTheme?: () => string;
+    __articlePublisherShowPage?: (pageId: string) => void;
+    __evenPublisherLastPublishedPending?: () => void;
   }
 }
 
@@ -91,8 +100,7 @@ async function deleteResearchEntryFromPhone(id: string): Promise<void> {
 
 const AI_SETTINGS_INPUT_IDS = [
   'google-generative-key',
-  'openai-key',
-  'openai-model',
+  'google-generative-draft-model',
   'elevenlabs-key',
   'wp-url',
   'wp-username',
@@ -360,10 +368,176 @@ function bootResearchPhoneLists(): void {
   void render();
 }
 
+function bootLastPublishedUi(): void {
+  const statusEl = document.getElementById('last-published-status');
+  const copyEl = document.getElementById('last-published-copy') as HTMLTextAreaElement | null;
+  const imageEl = document.getElementById('last-published-image') as HTMLImageElement | null;
+  const imagePlaceholderEl = document.getElementById('last-published-image-placeholder');
+  const saveImageBtn = document.getElementById('last-published-save-image') as HTMLButtonElement | null;
+  const regenerateImageBtn = document.getElementById('last-published-regenerate-image') as HTMLButtonElement | null;
+  const copyTextBtn = document.getElementById('last-published-copy-text') as HTMLButtonElement | null;
+
+  let currentSnapshot: LastPublishedSnapshot | null = null;
+
+  const setLastPublishedStatus = (message: string): void => {
+    if (statusEl) statusEl.textContent = message;
+  };
+
+  const renderSnapshot = (snapshot: LastPublishedSnapshot | null): void => {
+    currentSnapshot = snapshot;
+    if (!snapshot) {
+      if (copyEl) copyEl.value = '';
+      if (imageEl) {
+        imageEl.hidden = true;
+        imageEl.removeAttribute('src');
+      }
+      if (imagePlaceholderEl) {
+        imagePlaceholderEl.hidden = false;
+        imagePlaceholderEl.textContent = 'Image will appear here after publishing.';
+      }
+      if (saveImageBtn) saveImageBtn.disabled = true;
+      if (regenerateImageBtn) regenerateImageBtn.disabled = true;
+      if (copyTextBtn) copyTextBtn.disabled = true;
+      setLastPublishedStatus('Nothing published yet in this session.');
+      return;
+    }
+
+    if (copyEl) copyEl.value = snapshot.socialCopy;
+    if (copyTextBtn) copyTextBtn.disabled = snapshot.socialCopy.trim().length === 0;
+
+    if (snapshot.imageDataUrl && imageEl) {
+      imageEl.src = snapshot.imageDataUrl;
+      imageEl.hidden = false;
+      if (imagePlaceholderEl) imagePlaceholderEl.hidden = true;
+      if (saveImageBtn) saveImageBtn.disabled = false;
+    } else {
+      if (imageEl) {
+        imageEl.hidden = true;
+        imageEl.removeAttribute('src');
+      }
+      if (imagePlaceholderEl) {
+        imagePlaceholderEl.hidden = false;
+        imagePlaceholderEl.textContent = snapshot.imageError
+          ? `Image unavailable: ${snapshot.imageError}`
+          : 'Generating image…';
+      }
+      if (saveImageBtn) saveImageBtn.disabled = true;
+    }
+
+    if (regenerateImageBtn) {
+      regenerateImageBtn.disabled = snapshot.socialCopy.trim().length === 0;
+    }
+  };
+
+  const loadStoredSnapshot = async (): Promise<void> => {
+    const snapshot = await loadLastPublishedSnapshot(storageBridge);
+    if (snapshot) {
+      renderSnapshot(snapshot);
+      if (snapshot.imageDataUrl) {
+        setLastPublishedStatus('Ready to copy and share.');
+      } else if (snapshot.imageError) {
+        setLastPublishedStatus('Social copy ready. Image generation failed — try again.');
+      } else if (snapshot.socialCopy) {
+        setLastPublishedStatus('Social copy ready.');
+      }
+    }
+  };
+
+  const runPendingPipeline = async (): Promise<void> => {
+    const config = await loadConfigFromLocalStorage(storageBridge);
+    if (!config.googleGenerativeApiKey?.trim()) {
+      setLastPublishedStatus('Google Gemini API key missing — add it in Settings, then publish again.');
+      appendEventLog('Last Published skipped: Gemini API key not configured.');
+      return;
+    }
+
+    window.__articlePublisherShowPage?.('page-last-published');
+    setLastPublishedStatus('Loading…');
+
+    await processLastPublishedPending(storageBridge, config, {
+      onStatus: setLastPublishedStatus,
+      onSnapshot: (snapshot) => {
+        renderSnapshot(snapshot);
+      },
+      onError: (message) => {
+        appendEventLog(`Last Published warning: ${message}`);
+      },
+    });
+  };
+
+  window.__evenPublisherLastPublishedPending = () => {
+    void runPendingPipeline();
+  };
+
+  window.addEventListener('article-publisher:last-published-pending', () => {
+    void runPendingPipeline();
+  });
+
+  copyTextBtn?.addEventListener('click', () => {
+    const text = copyEl?.value ?? '';
+    if (!text.trim()) return;
+    void navigator.clipboard.writeText(text).then(
+      () => {
+        setStatus('Social message copied to clipboard.');
+        appendEventLog('Last Published message copied.');
+      },
+      () => {
+        copyEl?.focus();
+        copyEl?.select();
+        setStatus('Copy failed — message selected; use your phone paste menu.');
+      },
+    );
+  });
+
+  saveImageBtn?.addEventListener('click', () => {
+    if (!currentSnapshot?.imageDataUrl) return;
+    saveImageToPhone(currentSnapshot.imageDataUrl, currentSnapshot.title);
+    setStatus('Image download started — check your phone downloads or share sheet.');
+    appendEventLog('Last Published image save requested.');
+  });
+
+  regenerateImageBtn?.addEventListener('click', () => {
+    if (!currentSnapshot) return;
+    void (async () => {
+      const config = await loadConfigFromLocalStorage(storageBridge);
+      if (!config.googleGenerativeApiKey?.trim()) {
+        setLastPublishedStatus('Google Gemini API key missing — add it in Settings.');
+        return;
+      }
+      regenerateImageBtn.disabled = true;
+      setLastPublishedStatus('Generating image…');
+      try {
+        const next = await regenerateLastPublishedImage(
+          storageBridge,
+          config,
+          currentSnapshot,
+          setLastPublishedStatus,
+        );
+        renderSnapshot(next);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setLastPublishedStatus(`Image generation failed: ${message}`);
+        appendEventLog(`Last Published regenerate error: ${message}`);
+      } finally {
+        if (regenerateImageBtn) regenerateImageBtn.disabled = !currentSnapshot?.socialCopy.trim();
+      }
+    })();
+  });
+
+  void (async () => {
+    await loadStoredSnapshot();
+    const pending = await readLastPublishedPending(storageBridge);
+    if (pending) {
+      await runPendingPipeline();
+    }
+  })();
+}
+
 async function bootSettingsUi(): Promise<void> {
   const googleGenerativeKeyInput = document.getElementById('google-generative-key') as HTMLInputElement | null;
-  const openAiKeyInput = document.getElementById('openai-key') as HTMLInputElement | null;
-  const openAiModelInput = document.getElementById('openai-model') as HTMLInputElement | null;
+  const googleGenerativeDraftModelInput = document.getElementById(
+    'google-generative-draft-model',
+  ) as HTMLInputElement | null;
   const elevenLabsKeyInput = document.getElementById('elevenlabs-key') as HTMLInputElement | null;
   const wpUrlInput = document.getElementById('wp-url') as HTMLInputElement | null;
   const wpUserInput = document.getElementById('wp-username') as HTMLInputElement | null;
@@ -375,7 +549,9 @@ async function bootSettingsUi(): Promise<void> {
   const useTranscriptBtn = document.getElementById('use-transcript') as HTMLButtonElement | null;
   const topicsListEl = document.getElementById('topics-list') as HTMLUListElement | null;
   const newTopicInput = document.getElementById('new-topic') as HTMLInputElement | null;
+  const newTopicRssInput = document.getElementById('new-topic-rss') as HTMLInputElement | null;
   const topicsAddBtn = document.getElementById('topics-add') as HTMLButtonElement | null;
+  const topicsUpdateBtn = document.getElementById('topics-update') as HTMLButtonElement | null;
   const topicsDeleteBtn = document.getElementById('topics-delete') as HTMLButtonElement | null;
   const topicsSaveBtn = document.getElementById('topics-save') as HTMLButtonElement | null;
 
@@ -416,20 +592,40 @@ async function bootSettingsUi(): Promise<void> {
     });
   }
 
-  let topics: string[] = [];
+  let topics: PublisherTopic[] = [];
+  let selectedTopicIndex: number | null = null;
+
+  const clearTopicForm = (): void => {
+    if (newTopicInput) newTopicInput.value = '';
+    if (newTopicRssInput) newTopicRssInput.value = '';
+    selectedTopicIndex = null;
+  };
+
+  const readTopicForm = (): PublisherTopic => ({
+    name: newTopicInput?.value.trim() ?? '',
+    rssUrl: newTopicRssInput?.value.trim() ?? '',
+  });
 
   const renderTopicsList = () => {
     if (!topicsListEl) return;
     topicsListEl.innerHTML = '';
     topics.forEach((topic, index) => {
       const li = document.createElement('li');
-      li.textContent = topic;
+      const rssHint = topic.rssUrl ? ` · RSS` : '';
+      li.textContent = `${topic.name}${rssHint}`;
+      li.title = topic.rssUrl || topic.name;
       li.dataset.index = String(index);
+      if (selectedTopicIndex === index) {
+        li.classList.add('selected');
+      }
       li.addEventListener('click', () => {
         if (!topicsListEl) return;
         const children = Array.from(topicsListEl.querySelectorAll('li'));
         children.forEach((child) => child.classList.remove('selected'));
         li.classList.add('selected');
+        selectedTopicIndex = index;
+        if (newTopicInput) newTopicInput.value = topic.name;
+        if (newTopicRssInput) newTopicRssInput.value = topic.rssUrl;
       });
       topicsListEl.appendChild(li);
     });
@@ -438,8 +634,9 @@ async function bootSettingsUi(): Promise<void> {
   const reloadFromStorage = async (): Promise<void> => {
     const config = await loadConfigFromLocalStorage(storageBridge);
     if (googleGenerativeKeyInput) googleGenerativeKeyInput.value = config.googleGenerativeApiKey;
-    if (openAiKeyInput) openAiKeyInput.value = config.openAiApiKey;
-    if (openAiModelInput) openAiModelInput.value = config.openAiModel;
+    if (googleGenerativeDraftModelInput) {
+      googleGenerativeDraftModelInput.value = config.googleGenerativeDraftModel;
+    }
     if (elevenLabsKeyInput) elevenLabsKeyInput.value = config.elevenLabsApiKey;
     if (wpUrlInput) wpUrlInput.value = config.wordpressBaseUrl;
     if (wpUserInput) wpUserInput.value = config.wordpressUsername;
@@ -461,8 +658,7 @@ async function bootSettingsUi(): Promise<void> {
   saveBtn?.addEventListener('click', () => {
     const next = {
       googleGenerativeApiKey: googleGenerativeKeyInput?.value ?? '',
-      openAiApiKey: openAiKeyInput?.value ?? '',
-      openAiModel: openAiModelInput?.value ?? 'gpt-5.4-mini',
+      googleGenerativeDraftModel: googleGenerativeDraftModelInput?.value ?? 'gemini-3-flash-preview',
       elevenLabsApiKey: elevenLabsKeyInput?.value ?? '',
       wordpressBaseUrl: wpUrlInput?.value ?? '',
       wordpressUsername: wpUserInput?.value ?? '',
@@ -480,22 +676,48 @@ async function bootSettingsUi(): Promise<void> {
   });
 
   topicsAddBtn?.addEventListener('click', () => {
-    const value = newTopicInput?.value.trim() ?? '';
-    if (!value) {
+    const next = readTopicForm();
+    if (!next.name) {
       setStatus('Topic is empty. Type a name first.');
       return;
     }
-    if (!topics.includes(value)) {
-      topics = [...topics, value];
-      void (async () => {
-        await saveTopicsToLocalStorage(storageBridge, topics);
-        renderTopicsList();
-        appendEventLog(`Topic added: ${value}`);
-      })();
+    if (topics.some((topic) => topic.name.toLowerCase() === next.name.toLowerCase())) {
+      setStatus('Topic already exists. Select it to edit or choose another name.');
+      return;
     }
-    if (newTopicInput) {
-      newTopicInput.value = '';
+    topics = [...topics, next];
+    void (async () => {
+      await saveTopicsToLocalStorage(storageBridge, topics);
+      renderTopicsList();
+      appendEventLog(`Topic added: ${next.name}${next.rssUrl ? ' (RSS)' : ''}`);
+      clearTopicForm();
+    })();
+  });
+
+  topicsUpdateBtn?.addEventListener('click', () => {
+    if (selectedTopicIndex == null || selectedTopicIndex < 0 || selectedTopicIndex >= topics.length) {
+      setStatus('Select a topic from the list to update.');
+      return;
     }
+    const next = readTopicForm();
+    if (!next.name) {
+      setStatus('Topic name is empty.');
+      return;
+    }
+    const duplicate = topics.some(
+      (topic, index) => index !== selectedTopicIndex && topic.name.toLowerCase() === next.name.toLowerCase(),
+    );
+    if (duplicate) {
+      setStatus('Another topic already uses that name.');
+      return;
+    }
+    topics = topics.map((topic, index) => (index === selectedTopicIndex ? next : topic));
+    void (async () => {
+      await saveTopicsToLocalStorage(storageBridge, topics);
+      renderTopicsList();
+      appendEventLog(`Topic updated: ${next.name}${next.rssUrl ? ' (RSS)' : ''}`);
+      setStatus(`Updated topic: ${next.name}`);
+    })();
   });
 
   topicsDeleteBtn?.addEventListener('click', () => {
@@ -511,9 +733,10 @@ async function bootSettingsUi(): Promise<void> {
       topics = topics.filter((_, i) => i !== index);
       void (async () => {
         await saveTopicsToLocalStorage(storageBridge, topics);
+        clearTopicForm();
         renderTopicsList();
-        appendEventLog(`Topic deleted: ${removed}`);
-        setStatus(`Deleted topic: ${removed}`);
+        appendEventLog(`Topic deleted: ${removed.name}`);
+        setStatus(`Deleted topic: ${removed.name}`);
       })();
     }
   });
@@ -597,6 +820,7 @@ async function main() {
   bootReadAloudStartBanner();
   bootPhoneAudioUi();
   bootResearchPhoneLists();
+  bootLastPublishedUi();
   //appendEventLog('[main] bootSettingsUi ok');
 
   const connectBtn = document.getElementById('connectBtn') as HTMLButtonElement | null;

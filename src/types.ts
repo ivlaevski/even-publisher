@@ -22,11 +22,36 @@ export interface Research {
   hashtags?: string[];
 }
 
+export interface PublisherTopic {
+  name: string;
+  /** Optional RSS feed URL. When set, news is discovered only from that feed's XML. */
+  rssUrl: string;
+}
+
+/** Payload queued when a research is submitted to WordPress. */
+export interface LastPublishedInput {
+  title: string;
+  content: string;
+  publishedAt: string;
+  sourceJson?: unknown;
+}
+
+/** Snapshot shown on the phone “Last Published” tab. */
+export interface LastPublishedSnapshot {
+  title: string;
+  socialCopy: string;
+  sourceUrl: string | null;
+  publishedAt: string;
+  imageMimeType?: string;
+  imageDataUrl?: string;
+  imageError?: string;
+}
+
 export interface PublisherConfig {
-  /** Google Gemini API key — used only for `fetchLatestAiNews` (Generative AI + search grounding). */
+  /** Google Gemini API key — news, draft elaboration, and refinement. */
   googleGenerativeApiKey: string;
-  openAiApiKey: string;
-  openAiModel: string;
+  /** Gemini model for elaborating drafts and refining research text. */
+  googleGenerativeDraftModel: string;
   wordpressBaseUrl: string;
   wordpressUsername: string;
   wordpressPassword: string;

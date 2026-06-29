@@ -15,7 +15,7 @@ import {
   type EvenHubEvent,
   type EvenAppBridge,
 } from '@evenrealities/even_hub_sdk';
-import type { AiNewsItem, PublisherConfig, Research, ViewName } from './types';
+import type { AiNewsItem, PublisherConfig, PublisherTopic, Research, ViewName } from './types';
 import {
   appendEventLog,
   clamp,
@@ -25,6 +25,7 @@ import {
   setStatus,
 } from './utils';
 import { elaborateResearch, fetchLatestAiNews, publishToWordPress, refineResearch, synthesizeSpeech } from './api';
+import { enqueueLastPublishedPending, notifyLastPublishedPending } from './last-published';
 import {
   hasPhonePlaybackPrimedThisSession,
   prepareSharedPlaybackFromMp3,
@@ -99,8 +100,8 @@ type UiState = {
   researchPageIndex: number;
   readyPages: string[];
   readyPageIndex: number;
-  topics: string[];
-  selectedTopic: string | null;
+  topics: PublisherTopic[];
+  selectedTopic: PublisherTopic | null;
 };
 
 export class EvenPublisherClient {
@@ -211,8 +212,7 @@ export class EvenPublisherClient {
     const cfg = await loadConfigFromLocalStorage(this.bridge);
     return {
       googleGenerativeApiKey: cfg.googleGenerativeApiKey,
-      openAiApiKey: cfg.openAiApiKey,
-      openAiModel: cfg.openAiModel,
+      googleGenerativeDraftModel: cfg.googleGenerativeDraftModel,
       wordpressBaseUrl: cfg.wordpressBaseUrl,
       wordpressUsername: cfg.wordpressUsername,
       wordpressPassword: cfg.wordpressPassword,
@@ -832,7 +832,10 @@ export class EvenPublisherClient {
       return;
     }
 
-    const items = topics.map((topic, index) => this.sanitizeForDisplay(`${index + 1}. ${topic}`, 60));
+    const items = topics.map((topic, index) => {
+      const suffix = topic.rssUrl ? ' [RSS]' : '';
+      return this.sanitizeForDisplay(`${index + 1}. ${topic.name}${suffix}`, 60);
+    });
     items.push('<- Back to main menu');
 
     const list = new ListContainerProperty({
@@ -1203,15 +1206,19 @@ export class EvenPublisherClient {
       return;
     }
 
-    const topic = (this.ui.selectedTopic ?? 'Artificial Intelligence').trim();
+    const topic = this.ui.selectedTopic ?? { name: 'Artificial Intelligence', rssUrl: '' };
 
-    await this.renderNewResearchLoading(`Finding the 10 most recent and discussion-worthy developments about ${topic}. Focus on events from the last 30 days. Search priority on official website, newsroom, blog, press release pages, official social accounts, reposts and reactions on social media.`);
+    const loadingMessage = topic.rssUrl
+      ? `Finding articles about ${topic.name} in RSS feed…`
+      : `Finding the 10 most recent and discussion-worthy developments about ${topic.name}. Focus on events from the last 30 days. Search priority on official website, newsroom, blog, press release pages, official social accounts, reposts and reactions on social media.`;
+
+    await this.renderNewResearchLoading(loadingMessage);
 
     try {
       this.ui.aiNews = await fetchLatestAiNews(config, topic);
       this.ui.aiSelectedIndex = 0;
       this.ui.selectedTopic = null;
-      appendEventLog(`Fetched ${this.ui.aiNews.length} news items for "${topic}"`);
+      appendEventLog(`Fetched ${this.ui.aiNews.length} news items for "${topic.name}"`);
       await this.renderAiNewsList();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1225,9 +1232,9 @@ export class EvenPublisherClient {
     if (!item) return;
 
     const config = await this.getConfig();
-    if (!config.openAiApiKey) {
+    if (!config.googleGenerativeApiKey) {
       await this.showTextFullScreen(
-        'OpenAI API key missing.\n\nSet the key on the phone screen, then try again.',
+        'Google Gemini API key missing.\n\nSet the key on the phone screen, then try again.',
         'Configuration error'
       );
       return;
@@ -1326,9 +1333,9 @@ export class EvenPublisherClient {
     }
 
     const config = await this.getConfig();
-    if (!config.openAiApiKey) {
+    if (!config.googleGenerativeApiKey) {
       await this.showTextFullScreen(
-        'OpenAI API key missing.\n\nSet the key on the phone screen, then try again.',
+        'Google Gemini API key missing.\n\nSet the key on the phone screen, then try again.',
         'Configuration error'
       );
       return;
@@ -1389,9 +1396,16 @@ export class EvenPublisherClient {
     try {
       setStatus('Publishing to WordPress…');
       await publishToWordPress(config, research, delay);
+      await enqueueLastPublishedPending(this.bridge, {
+        title: research.title,
+        content: research.content,
+        publishedAt: new Date().toISOString(),
+        sourceJson: research.sourceJson,
+      });
+      notifyLastPublishedPending();
       await this.removeResearch(research);
       await this.renderMainMenu();
-      setStatus('Published to WordPress and removed from lists.');
+      setStatus('Published to WordPress. Open Last Published on the phone to copy for social media.');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await this.showTextFullScreen(`Failed to publish.\n\n${message}`, '[Tab=back]');
